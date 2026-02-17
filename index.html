@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1C1126">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>FinTrack</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@100..900&family=Google+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- TOP BAR -->
+  <header class="top-bar" id="topBar">
+    <span class="top-bar-title">FinTrack</span>
+    <div class="top-bar-actions">
+      <button class="icon-btn" onclick="App.toggleConfig()"><span class="msr">settings</span></button>
+      <button class="icon-btn" onclick="App.loadAll()"><span class="msr">sync</span></button>
+    </div>
+  </header>
+
+  <!-- CONFIG -->
+  <div class="config-sheet" id="configSheet">
+    <span class="field-label">URL del Apps Script</span>
+    <input class="m3-input" type="text" id="scriptUrl" placeholder="https://script.google.com/macros/s/.../exec">
+    <div class="config-hint">Pega la URL de tu Google Apps Script desplegado como webapp.</div>
+    <button class="m3-tonal-btn" onclick="App.saveConfig()">Guardar</button>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <nav class="bottom-nav">
+    <div class="bottom-nav-inner">
+      <button class="bnav-item active" data-t="form" onclick="App.goTab('form')"><span class="pill"></span><span class="msr">add_circle</span><span>Registrar</span></button>
+      <button class="bnav-item" data-t="history" onclick="App.goTab('history')"><span class="pill"></span><span class="msr">receipt_long</span><span>Historial</span></button>
+      <button class="bnav-item" data-t="subs" onclick="App.goTab('subs')"><span class="pill"></span><span class="msr">autorenew</span><span>Recurrentes</span></button>
+      <button class="bnav-item" data-t="invest" onclick="App.goTab('invest')"><span class="pill"></span><span class="msr">account_balance_wallet</span><span>Inversi&#243;n</span></button>
+    </div>
+  </nav>
+
+  <!-- ========== REGISTRAR ========== -->
+  <section class="section show" id="sec-form">
+    <div class="seg-group">
+      <button class="seg-btn sel-exp" id="segExp" onclick="App.setType('Gasto')"><span class="msr">arrow_downward</span> Gasto</button>
+      <button class="seg-btn" id="segInc" onclick="App.setType('Ingreso')"><span class="msr">arrow_upward</span> Ingreso</button>
+      <button class="seg-btn" id="segInv" onclick="App.setType('Inversi&#243;n')"><span class="msr">account_balance_wallet</span> Inversi&#243;n</button>
+    </div>
+
+    <div class="scope-row" id="scopeRow">
+      <button class="scope-btn active" data-s="Personal" onclick="App.setScope('Personal')"><span class="msr">person</span> Personal</button>
+      <button class="scope-btn" data-s="Com&#250;n" onclick="App.setScope('Com&#250;n')"><span class="msr">group</span> Com&#250;n</button>
+    </div>
+
+    <div class="amount-box">
+      <span class="field-label">Importe</span>
+      <input class="m3-input" type="number" id="inputAmount" placeholder="0.00" step="0.01" min="0" inputmode="decimal">
+      <span class="cur">&#8364;</span>
+    </div>
+
+    <div class="chips-section">
+      <span class="field-label">Categor&#237;a</span>
+      <div class="chips-wrap" id="catChips"></div>
+      <div class="custom-row" id="customCatRow">
+        <input type="text" id="customCatInput" placeholder="Nueva categor&#237;a...">
+        <button onclick="App.addCustomCat()">A&#241;adir</button>
+      </div>
+      <div class="subcat-box" id="subcatBox">
+        <span class="field-label" style="margin-bottom:8px">Subcategor&#237;a</span>
+        <div class="chips-wrap" id="subcatChips"></div>
+        <div class="custom-row" id="customSubRow">
+          <input type="text" id="customSubInput" placeholder="Nueva subcategor&#237;a...">
+          <button onclick="App.addCustomSub()">A&#241;adir</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="field-group">
+      <span class="field-label">Descripci&#243;n</span>
+      <input class="m3-input" type="text" id="inputDesc" placeholder="Ej: Compra semanal en Mercadona">
+    </div>
+
+    <div class="field-group">
+      <span class="field-label">Fecha</span>
+      <input class="m3-input" type="date" id="inputDate">
+    </div>
+
+    <div class="recurrence-box" id="recBox">
+      <label class="rec-check-row" id="recCheckRow">
+        <input type="checkbox" class="m3-cb" id="isRec" onchange="App.toggleRec()">
+        <div class="rec-text">
+          <div class="main">Movimiento recurrente</div>
+          <div class="hint">Suscripci&#243;n o gasto peri&#243;dico</div>
+        </div>
+      </label>
+      <div class="rec-opts" id="recOpts">
+        <span class="field-label">Tipo de recurrencia</span>
+        <div class="rec-type-row">
+          <button class="rec-type-btn active" data-rt="suscripcion" onclick="App.setRecType('suscripcion')">Suscripci&#243;n</button>
+          <button class="rec-type-btn" data-rt="periodico" onclick="App.setRecType('periodico')">Gasto peri&#243;dico</button>
+        </div>
+        <span class="field-label">Frecuencia</span>
+        <div class="freq-row">
+          <button class="freq-btn active" data-fq="mensual" onclick="App.setFreq('mensual')">Mensual</button>
+          <button class="freq-btn" data-fq="trimestral" onclick="App.setFreq('trimestral')">Trimestral</button>
+          <button class="freq-btn" data-fq="semestral" onclick="App.setFreq('semestral')">Semestral</button>
+          <button class="freq-btn" data-fq="anual" onclick="App.setFreq('anual')">Anual</button>
+        </div>
+        <span class="field-label">D&#237;a de cobro</span>
+        <input type="number" class="day-input" id="inputDay" value="1" min="1" max="31">
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== HISTORIAL ========== -->
+  <section class="section" id="sec-history">
+    <div class="month-pill">
+      <button class="month-arrow" onclick="App.changeMonth(-1)"><span class="msr">chevron_left</span></button>
+      <span class="month-text" id="monthLabel">Febrero 2026</span>
+      <button class="month-arrow" onclick="App.changeMonth(1)"><span class="msr">chevron_right</span></button>
+    </div>
+    <div class="balance-hero" id="balanceHero">
+      <div class="bh-main">
+        <div class="bh-label">Balance del mes</div>
+        <div class="bh-val num-lg" id="sumBal">&#8364;0</div>
+      </div>
+      <div class="bh-row">
+        <div class="bh-item"><span class="msr" style="font-size:16px;color:var(--inc)">arrow_upward</span><span class="bh-amount num pos" id="sumInc">&#8364;0</span><span class="bh-tag">Ingresos</span></div>
+        <div class="bh-item"><span class="msr" style="font-size:16px;color:var(--exp)">arrow_downward</span><span class="bh-amount num neg" id="sumExp">&#8364;0</span><span class="bh-tag">Gastos</span></div>
+      </div>
+    </div>
+    <div class="filter-row">
+      <button class="fchip active" data-f="all" onclick="App.setFilter('all')">Todos</button>
+      <button class="fchip" data-f="Gasto" onclick="App.setFilter('Gasto')">Gastos</button>
+      <button class="fchip" data-f="Ingreso" onclick="App.setFilter('Ingreso')">Ingresos</button>
+      <button class="fchip" data-f="Com&#250;n" onclick="App.setFilter('Com&#250;n')">Comunes</button>
+    </div>
+    <div class="tx-list" id="txList">
+      <div class="empty"><span class="msr">database</span><p>Configura tu Apps Script<br>para ver tus movimientos</p></div>
+    </div>
+  </section>
+
+  <!-- ========== RECURRENTES ========== -->
+  <section class="section" id="sec-subs">
+    <div class="subs-hero">
+      <div class="sh-label">Gasto mensual recurrente</div>
+      <div class="sh-val num-lg" id="subsTotal">&#8364;0,00</div>
+      <div class="sh-count" id="subsCount">0 activas</div>
+    </div>
+    <div class="subs-filter">
+      <button class="fchip active" data-sf="all" onclick="App.setSubFilter('all')">Todas</button>
+      <button class="fchip" data-sf="suscripcion" onclick="App.setSubFilter('suscripcion')">Suscripciones</button>
+      <button class="fchip" data-sf="periodico" onclick="App.setSubFilter('periodico')">Peri&#243;dicos</button>
+    </div>
+    <div id="subsList">
+      <div class="empty"><span class="msr">autorenew</span><p>Sin recurrencias registradas.</p></div>
+    </div>
+  </section>
+
+  <!-- ========== INVERSI&#211;N ========== -->
+  <section class="section" id="sec-invest">
+    <div class="inv-hero">
+      <div class="ih-label">Total invertido este mes</div>
+      <div class="ih-val num-lg" id="invTotal">&#8364;0,00</div>
+      <div class="ih-sub" id="invCount">0 aportaciones</div>
+    </div>
+    <div class="inv-bars" id="invBars"></div>
+    <div class="month-pill">
+      <button class="month-arrow" onclick="App.changeInvMonth(-1)"><span class="msr">chevron_left</span></button>
+      <span class="month-text" id="invMonthLabel">Febrero 2026</span>
+      <button class="month-arrow" onclick="App.changeInvMonth(1)"><span class="msr">chevron_right</span></button>
+    </div>
+    <div class="tx-list" id="invList" style="margin-top:16px">
+      <div class="empty"><span class="msr">account_balance_wallet</span><p>Sin inversiones registradas este mes.</p></div>
+    </div>
+  </section>
+
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal-overlay" id="editModal" onclick="if(event.target===this)App.closeEdit()">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <span class="modal-title">Editar movimiento</span>
+      <button class="icon-btn" onclick="App.closeEdit()"><span class="msr">close</span></button>
+    </div>
+    <div class="field-group">
+      <span class="field-label">Categor&#237;a</span>
+      <div class="chips-wrap" id="editCatChips"></div>
+    </div>
+    <div class="field-group" id="editSubcatBox" style="display:none">
+      <span class="field-label">Subcategor&#237;a</span>
+      <div class="chips-wrap" id="editSubcatChips"></div>
+    </div>
+    <div class="field-group">
+      <span class="field-label">Descripci&#243;n</span>
+      <input class="m3-input" type="text" id="editDesc">
+    </div>
+    <div class="field-group">
+      <span class="field-label">Importe</span>
+      <input class="m3-input" type="number" id="editAmount" step="0.01" inputmode="decimal">
+    </div>
+    <div class="field-group">
+      <span class="field-label">Fecha</span>
+      <input class="m3-input" type="date" id="editDate">
+    </div>
+    <input type="hidden" id="editId">
+    <input type="hidden" id="editType">
+    <button class="m3-btn" onclick="App.saveEdit()"><span class="msr">check</span> Guardar cambios</button>
+  </div>
+</div>
+
+<!-- FLOATING REGISTER BUTTON -->
+<button class="floating-cta" id="floatingRegister" onclick="App.submitEntry()">
+  <span class="msr">check</span> Registrar
+</button>
+
+<div class="snackbar" id="snackbar"></div>
+
+<!-- JS Modules -->
+<script src="js/state.js"></script>
+<script src="js/api.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
