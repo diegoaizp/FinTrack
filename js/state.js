@@ -12,6 +12,7 @@ const FT = {
   // Filters
   filter: 'all',
   subFilter: 'all',
+  subCycleFilter: 'all',
 
   // Month navigation
   month: new Date().getMonth(),

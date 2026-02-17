@@ -189,16 +189,15 @@ const UI = {
     const list = document.getElementById('subsList');
     let items = FT.templates;
     if (FT.subFilter !== 'all') items = items.filter(t => t.recurrence === FT.subFilter);
+    if (FT.subCycleFilter !== 'all') items = items.filter(t => t.frequency === FT.subCycleFilter);
 
     const active = items.filter(s => s.status === 'activo');
     const paused = items.filter(s => s.status !== 'activo');
 
-    const monthlyTotal = FT.templates
-      .filter(s => s.status === 'activo')
-      .reduce((s, x) => s + monthlyAmount(x), 0);
+    const monthlyTotal = active.reduce((s, x) => s + monthlyAmount(x), 0);
 
     document.getElementById('subsTotal').textContent = '€' + monthlyTotal.toFixed(2);
-    const ac = FT.templates.filter(s => s.status === 'activo').length;
+    const ac = active.length;
     document.getElementById('subsCount').textContent = ac + ' activa' + (ac !== 1 ? 's' : '');
 
     if (!items.length) {
@@ -238,7 +237,11 @@ const UI = {
         </div>
         <div class="sc-right">
           <span class="sc-price num">€${s.amount.toFixed(2)}</span>
-          <label class="m3-sw"><input type="checkbox" ${isActive ? 'checked' : ''} onchange="App.toggleTemplate('${s.id}')"><span class="track"></span></label>
+          <div class="sc-actions">
+            <button class="tx-act" onclick="App.openEditTemplate('${s.id}')" title="Editar"><span class="msr">edit</span></button>
+            <button class="tx-act" onclick="App.deleteTemplate('${s.id}')" title="Eliminar"><span class="msr">delete</span></button>
+            <label class="m3-sw"><input type="checkbox" ${isActive ? 'checked' : ''} onchange="App.toggleTemplate('${s.id}')"><span class="track"></span></label>
+          </div>
         </div>
       </div>`;
     }).join('');
@@ -256,9 +259,6 @@ const UI = {
     const total = items.reduce((s, t) => s + t.amount, 0);
     document.getElementById('invTotal').textContent = '€' + total.toFixed(2);
     document.getElementById('invCount').textContent = items.length + ' aportacion' + (items.length !== 1 ? 'es' : '');
-
-    // Mini bar chart — last 6 months
-    this._renderInvBars();
 
     const list = document.getElementById('invList');
     if (!items.length) {
@@ -371,6 +371,44 @@ const UI = {
     g.innerHTML = info.subs.map(s =>
       `<button class="sub-chip${s === this._editSub ? ' selected' : ''}" onclick="App.pickEditSub('${esc(s)}')">${s}</button>`
     ).join('');
+  },
+
+  // ===== YTD CATEGORIES =====
+  renderYTDCategories(txList, containerId, type) {
+    const container = document.getElementById(containerId);
+    if (!txList.length) {
+      container.innerHTML = '<div class="empty" style="padding:24px"><p>Sin datos</p></div>';
+      return;
+    }
+
+    // Group by category
+    const cats = {};
+    txList.forEach(tx => {
+      if (!cats[tx.category]) cats[tx.category] = { total: 0, count: 0 };
+      cats[tx.category].total += tx.amount;
+      cats[tx.category].count++;
+    });
+
+    // Sort by total desc
+    const sorted = Object.entries(cats).sort((a, b) => b[1].total - a[1].total);
+    const maxTotal = sorted[0] ? sorted[0][1].total : 1;
+
+    const fillCls = type === 'exp' ? 'exp-fill' : 'inc-fill';
+    const colorCls = type === 'exp' ? 'exp-color' : 'inc-color';
+
+    container.innerHTML = sorted.map(([name, data]) => {
+      const ic = catIcon(name);
+      const pct = Math.round((data.total / maxTotal) * 100);
+      return `<div class="ytd-cat-card">
+        <div class="yc-icon"><span class="msr">${ic}</span></div>
+        <div class="yc-info">
+          <div class="yc-name">${name}</div>
+          <div class="yc-bar"><div class="yc-bar-fill ${fillCls}" style="width:${pct}%"></div></div>
+          <div class="yc-count">${data.count} movimiento${data.count !== 1 ? 's' : ''}</div>
+        </div>
+        <div class="yc-amount ${colorCls} num">€${data.total.toFixed(2)}</div>
+      </div>`;
+    }).join('');
   },
 
   // ===== SKELETON =====

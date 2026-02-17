@@ -11,7 +11,7 @@ const App = {
     UI.updateInvMonthLabel();
 
     if (url) {
-      this.loadAll();
+      this.loadAll(false);
     } else {
       this.toggleConfig();
     }
@@ -31,10 +31,10 @@ const App = {
   },
 
   // ===== DATA LOADING =====
-  async loadAll() {
+  async loadAll(force = false) {
     UI.showSkeleton('txList');
     try {
-      await API.loadAll();
+      await API.loadAll(force);
       UI.renderCats();
       UI.renderList();
       UI.updateSummary();
@@ -46,10 +46,10 @@ const App = {
     }
   },
 
-  async loadCurrentMonth() {
+  async loadCurrentMonth(force = false) {
     UI.showSkeleton('txList');
     try {
-      await API.loadMonth(FT.year, FT.month);
+      await API.loadMonth(FT.year, FT.month, force);
       UI.renderList();
       UI.updateSummary();
     } catch (e) {
@@ -68,7 +68,16 @@ const App = {
     API.setUrl(url);
     UI.snack('Guardado');
     this.toggleConfig();
-    this.loadAll();
+    this.loadAll(true);
+  },
+
+  async syncTemplatesFromBackend() {
+    try {
+      await API.loadTemplates();
+    } catch (e) {
+      // Keep optimistic state if backend read fails
+    }
+    UI.renderTemplates();
   },
 
   // ===== TABS =====
@@ -76,11 +85,13 @@ const App = {
     document.querySelectorAll('.bnav-item').forEach(n =>
       n.classList.toggle('active', n.dataset.t === t)
     );
-    ['form', 'history', 'subs', 'invest'].forEach(s =>
+    ['form', 'history', 'subs', 'invest', 'ytd'].forEach(s =>
       document.getElementById('sec-' + s).classList.toggle('show', s === t)
     );
     // Show/hide floating register button
     document.getElementById('floatingRegister').style.display = t === 'form' ? 'flex' : 'none';
+    // Show/hide bottom nav (hide on YTD page)
+    document.querySelector('.bottom-nav').style.display = t === 'ytd' ? 'none' : '';
 
     if (t === 'form') setTimeout(() => document.getElementById('inputAmount').focus(), 150);
     if (t === 'subs') UI.renderTemplates();
@@ -249,6 +260,7 @@ const App = {
           creado: nowISO()
         };
         await API.addTemplate(tpl);
+        await this.syncTemplatesFromBackend();
       }
 
       UI.snack(FT.type + ' registrado');
@@ -306,8 +318,24 @@ const App = {
 
   setSubFilter(f) {
     FT.subFilter = f;
+    FT.subCycleFilter = 'all';
     document.querySelectorAll('.fchip[data-sf]').forEach(b =>
       b.classList.toggle('active', b.dataset.sf === f)
+    );
+    // Show/hide cycle sub-filter
+    const cycleRow = document.getElementById('subsCycleFilter');
+    cycleRow.style.display = f !== 'all' ? '' : 'none';
+    // Reset cycle chips
+    document.querySelectorAll('.fchip[data-cf]').forEach(b =>
+      b.classList.toggle('active', b.dataset.cf === 'all')
+    );
+    UI.renderTemplates();
+  },
+
+  setSubCycleFilter(f) {
+    FT.subCycleFilter = f;
+    document.querySelectorAll('.fchip[data-cf]').forEach(b =>
+      b.classList.toggle('active', b.dataset.cf === f)
     );
     UI.renderTemplates();
   },
@@ -373,26 +401,148 @@ const App = {
     } catch (e) { UI.snack('Error al eliminar'); }
   },
 
+  // ===== YTD BALANCE =====
+  async openYTD() {
+    this.goTab('ytd');
+    const year = FT.year;
+    document.getElementById('ytdYear').textContent = year;
+    document.getElementById('ytdLoading').style.display = '';
+    document.getElementById('ytdExpCats').innerHTML = '';
+    document.getElementById('ytdIncCats').innerHTML = '';
+    document.getElementById('ytdBalance').textContent = '€0';
+    document.getElementById('ytdInc').textContent = '€0';
+    document.getElementById('ytdExp').textContent = '€0';
+
+    try {
+      // Load all months for the year
+      const allTx = [];
+      const url = API.getUrl();
+      if (!url) { UI.snack('Configura la URL primero'); return; }
+
+      // Load each month Jan–current
+      const currentMonth = new Date().getFullYear() === year ? new Date().getMonth() : 11;
+      const promises = [];
+      for (let m = 0; m <= currentMonth; m++) {
+        promises.push(
+          fetch(`${url}?action=getMonth&year=${year}&month=${m + 1}`)
+            .then(r => r.json())
+            .then(rows => (rows || []).map(r => ({
+              type: r[2], category: r[4], subcategory: r[5] || '',
+              amount: parseFloat(r[7]) || 0, status: r[11] || 'activo'
+            })).filter(t => t.status === 'activo'))
+        );
+      }
+      const results = await Promise.all(promises);
+      results.forEach(items => allTx.push(...items));
+
+      // Calculate totals
+      const incTx = allTx.filter(t => t.type === 'Ingreso');
+      const expTx = allTx.filter(t => t.type === 'Gasto');
+      const totalInc = incTx.reduce((s, t) => s + t.amount, 0);
+      const totalExp = expTx.reduce((s, t) => s + t.amount, 0);
+      const bal = totalInc - totalExp;
+
+      document.getElementById('ytdInc').textContent = '€' + totalInc.toFixed(2);
+      document.getElementById('ytdExp').textContent = '€' + totalExp.toFixed(2);
+      const bEl = document.getElementById('ytdBalance');
+      bEl.textContent = (bal >= 0 ? '+' : '−') + '€' + Math.abs(bal).toFixed(2);
+      bEl.className = 'bh-val num-lg ' + (bal > 0 ? 'positive' : bal < 0 ? 'negative' : '');
+
+      // Group by category
+      UI.renderYTDCategories(expTx, 'ytdExpCats', 'exp');
+      UI.renderYTDCategories(incTx, 'ytdIncCats', 'inc');
+    } catch (e) {
+      UI.snack('Error al cargar datos YTD');
+    }
+    document.getElementById('ytdLoading').style.display = 'none';
+  },
+
+  closeYTD() {
+    this.goTab('history');
+  },
+
   // ===== TEMPLATES =====
   async pauseTemplate(pid) {
     if (!confirm('¿Pausar esta recurrencia?')) return;
     try {
       await API.toggleTemplate(pid, false);
       UI.renderList();
-      UI.renderTemplates();
+      await this.syncTemplatesFromBackend();
       UI.snack('Recurrencia pausada');
     } catch (e) { UI.snack('Error'); }
   },
 
   async toggleTemplate(pid) {
-    const t = FT.templates.find(x => x.id === pid);
+    const sid = String(pid ?? '').trim();
+    const t = FT.templates.find(x => String(x.id ?? '').trim() === sid);
     if (!t) return;
     const activate = t.status !== 'activo';
     try {
-      await API.toggleTemplate(pid, activate);
-      UI.renderTemplates();
+      await API.toggleTemplate(sid, activate);
+      await this.syncTemplatesFromBackend();
       UI.snack(activate ? 'Recurrencia activada' : 'Recurrencia pausada');
     } catch (e) { UI.snack('Error'); }
+  },
+
+  // ===== EDIT TEMPLATE =====
+  _editTplFreq: 'mensual',
+
+  openEditTemplate(pid) {
+    const sid = String(pid ?? '').trim();
+    const t = FT.templates.find(x => String(x.id ?? '').trim() === sid);
+    if (!t) return;
+    document.getElementById('editTplId').value = t.id;
+    document.getElementById('editTplDesc').value = t.description || '';
+    document.getElementById('editTplAmount').value = t.amount;
+    document.getElementById('editTplDay').value = t.dayOfCharge || 1;
+    this._editTplFreq = t.frequency || 'mensual';
+    document.querySelectorAll('#editTplFreqRow .freq-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.efq === this._editTplFreq)
+    );
+    document.getElementById('editTplModal').classList.add('show');
+  },
+
+  closeEditTemplate() {
+    document.getElementById('editTplModal').classList.remove('show');
+  },
+
+  setEditTplFreq(f) {
+    this._editTplFreq = f;
+    document.querySelectorAll('#editTplFreqRow .freq-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.efq === f)
+    );
+  },
+
+  async saveEditTemplate() {
+    const pid = document.getElementById('editTplId').value;
+    const desc = document.getElementById('editTplDesc').value.trim();
+    const amount = parseFloat(document.getElementById('editTplAmount').value);
+    const day = parseInt(document.getElementById('editTplDay').value) || 1;
+
+    if (!amount) { UI.snack('Introduce un importe'); return; }
+
+    try {
+      await API.updateTemplate(pid, {
+        descripcion: desc,
+        importe: amount,
+        frecuencia: this._editTplFreq,
+        dia_cobro: day
+      });
+      this.closeEditTemplate();
+      await this.syncTemplatesFromBackend();
+      UI.snack('Recurrencia actualizada');
+    } catch (e) { UI.snack('Error al guardar'); }
+  },
+
+  async deleteTemplate(pid) {
+    if (!confirm('¿Eliminar esta recurrencia?')) return;
+    const sid = String(pid ?? '').trim();
+    try {
+      await API.deleteTemplate(sid);
+      await this.syncTemplatesFromBackend();
+      const stillExists = FT.templates.some(x => String(x.id ?? '').trim() === sid);
+      UI.snack(stillExists ? 'No se pudo eliminar (revisa backend)' : 'Recurrencia eliminada');
+    } catch (e) { UI.snack('Error al eliminar'); }
   }
 };
 

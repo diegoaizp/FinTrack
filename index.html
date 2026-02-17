@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>FinTrack</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@100..900&family=Google+Sans:wght@400;500;700&display=swap" rel="stylesheet">
@@ -21,7 +22,7 @@
     <span class="top-bar-title">FinTrack</span>
     <div class="top-bar-actions">
       <button class="icon-btn" onclick="App.toggleConfig()"><span class="msr">settings</span></button>
-      <button class="icon-btn" onclick="App.loadAll()"><span class="msr">sync</span></button>
+      <button class="icon-btn" onclick="App.loadAll(true)"><span class="msr">sync</span></button>
     </div>
   </header>
 
@@ -133,6 +134,7 @@
         <div class="bh-item"><span class="msr" style="font-size:16px;color:var(--exp)">arrow_downward</span><span class="bh-amount num neg" id="sumExp">&#8364;0</span><span class="bh-tag">Gastos</span></div>
       </div>
     </div>
+    <button class="ytd-btn" onclick="App.openYTD()"><span class="msr">bar_chart</span> Ver Balance YTD</button>
     <div class="filter-row">
       <button class="fchip active" data-f="all" onclick="App.setFilter('all')">Todos</button>
       <button class="fchip" data-f="Gasto" onclick="App.setFilter('Gasto')">Gastos</button>
@@ -156,6 +158,13 @@
       <button class="fchip" data-sf="suscripcion" onclick="App.setSubFilter('suscripcion')">Suscripciones</button>
       <button class="fchip" data-sf="periodico" onclick="App.setSubFilter('periodico')">Peri&#243;dicos</button>
     </div>
+    <div class="subs-filter subs-cycle-filter" id="subsCycleFilter" style="display:none">
+      <button class="fchip active" data-cf="all" onclick="App.setSubCycleFilter('all')">Todos los ciclos</button>
+      <button class="fchip" data-cf="mensual" onclick="App.setSubCycleFilter('mensual')">Mensual</button>
+      <button class="fchip" data-cf="trimestral" onclick="App.setSubCycleFilter('trimestral')">Trimestral</button>
+      <button class="fchip" data-cf="semestral" onclick="App.setSubCycleFilter('semestral')">Semestral</button>
+      <button class="fchip" data-cf="anual" onclick="App.setSubCycleFilter('anual')">Anual</button>
+    </div>
     <div id="subsList">
       <div class="empty"><span class="msr">autorenew</span><p>Sin recurrencias registradas.</p></div>
     </div>
@@ -168,7 +177,6 @@
       <div class="ih-val num-lg" id="invTotal">&#8364;0,00</div>
       <div class="ih-sub" id="invCount">0 aportaciones</div>
     </div>
-    <div class="inv-bars" id="invBars"></div>
     <div class="month-pill">
       <button class="month-arrow" onclick="App.changeInvMonth(-1)"><span class="msr">chevron_left</span></button>
       <span class="month-text" id="invMonthLabel">Febrero 2026</span>
@@ -177,6 +185,27 @@
     <div class="tx-list" id="invList" style="margin-top:16px">
       <div class="empty"><span class="msr">account_balance_wallet</span><p>Sin inversiones registradas este mes.</p></div>
     </div>
+  </section>
+
+  <!-- ========== BALANCE YTD ========== -->
+  <section class="section" id="sec-ytd">
+    <div class="ytd-header">
+      <button class="icon-btn" onclick="App.closeYTD()"><span class="msr">arrow_back</span></button>
+      <span class="ytd-title">Balance YTD — <span id="ytdYear">2026</span></span>
+    </div>
+    <div class="ytd-hero">
+      <div class="bh-label">Balance acumulado del a&#241;o</div>
+      <div class="bh-val num-lg" id="ytdBalance">&#8364;0</div>
+      <div class="ytd-row">
+        <div class="ytd-item inc"><span class="msr" style="font-size:16px">arrow_upward</span><span class="num" id="ytdInc">&#8364;0</span><span class="ytd-tag">Ingresos</span></div>
+        <div class="ytd-item exp"><span class="msr" style="font-size:16px">arrow_downward</span><span class="num" id="ytdExp">&#8364;0</span><span class="ytd-tag">Gastos</span></div>
+      </div>
+    </div>
+    <div class="ytd-section-title"><span class="msr" style="font-size:18px">arrow_downward</span> Gastos por categor&#237;a</div>
+    <div id="ytdExpCats" class="ytd-cat-list"></div>
+    <div class="ytd-section-title" style="margin-top:20px"><span class="msr" style="font-size:18px">arrow_upward</span> Ingresos por categor&#237;a</div>
+    <div id="ytdIncCats" class="ytd-cat-list"></div>
+    <div class="ytd-loading" id="ytdLoading" style="display:none"><span class="spinner"></span> Cargando datos del a&#241;o...</div>
   </section>
 
 </div>
@@ -211,6 +240,39 @@
     <input type="hidden" id="editId">
     <input type="hidden" id="editType">
     <button class="m3-btn" onclick="App.saveEdit()"><span class="msr">check</span> Guardar cambios</button>
+  </div>
+</div>
+
+<!-- EDIT TEMPLATE MODAL -->
+<div class="modal-overlay" id="editTplModal" onclick="if(event.target===this)App.closeEditTemplate()">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <span class="modal-title">Editar recurrencia</span>
+      <button class="icon-btn" onclick="App.closeEditTemplate()"><span class="msr">close</span></button>
+    </div>
+    <div class="field-group">
+      <span class="field-label">Descripci&#243;n</span>
+      <input class="m3-input" type="text" id="editTplDesc">
+    </div>
+    <div class="field-group">
+      <span class="field-label">Importe</span>
+      <input class="m3-input" type="number" id="editTplAmount" step="0.01" inputmode="decimal">
+    </div>
+    <div class="field-group">
+      <span class="field-label">Frecuencia</span>
+      <div class="freq-row" id="editTplFreqRow">
+        <button class="freq-btn" data-efq="mensual" onclick="App.setEditTplFreq('mensual')">Mensual</button>
+        <button class="freq-btn" data-efq="trimestral" onclick="App.setEditTplFreq('trimestral')">Trimestral</button>
+        <button class="freq-btn" data-efq="semestral" onclick="App.setEditTplFreq('semestral')">Semestral</button>
+        <button class="freq-btn" data-efq="anual" onclick="App.setEditTplFreq('anual')">Anual</button>
+      </div>
+    </div>
+    <div class="field-group">
+      <span class="field-label">D&#237;a de cobro</span>
+      <input type="number" class="day-input" id="editTplDay" value="1" min="1" max="31">
+    </div>
+    <input type="hidden" id="editTplId">
+    <button class="m3-btn" onclick="App.saveEditTemplate()"><span class="msr">check</span> Guardar cambios</button>
   </div>
 </div>
 
