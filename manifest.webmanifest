@@ -1,9 +1,12 @@
 {
   "name": "FinTrack",
   "short_name": "FinTrack",
+  "id": "./index.html",
   "start_url": "./index.html",
   "scope": "./",
+  "description": "Registro personal de gastos, ingresos, recurrentes e inversión.",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#211F26",
   "theme_color": "#1C1126",
   "icons": [

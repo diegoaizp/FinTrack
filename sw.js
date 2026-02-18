@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'fintrack-v1';
+const CACHE_VERSION = 'fintrack-v2';
 const APP_SHELL = [
   './',
   './index.html',
@@ -18,7 +18,12 @@ const APP_SHELL = [
 
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_VERSION).then(cache => cache.addAll(APP_SHELL))
+    caches.open(CACHE_VERSION).then(async cache => {
+      // Avoid install failure if one asset is temporarily unreachable.
+      await Promise.allSettled(
+        APP_SHELL.map(url => cache.add(new Request(url, { cache: 'reload' })))
+      );
+    })
   );
   self.skipWaiting();
 });
@@ -38,6 +43,7 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   const req = event.request;
+  if (req.method !== 'GET') return;
 
   // For page navigations: network-first, fallback to cached shell.
   if (req.mode === 'navigate') {
