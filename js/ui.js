@@ -2,6 +2,16 @@
 
 const UI = {
 
+  setSyncStatus(state, message) {
+    const box = document.getElementById('syncStatus');
+    const text = document.getElementById('syncStatusText');
+    if (!box || !text) return;
+    box.classList.remove('syncing', 'error');
+    if (state === 'syncing') box.classList.add('syncing');
+    if (state === 'error') box.classList.add('error');
+    text.textContent = message;
+  },
+
   // ===== SNACKBAR =====
   snack(msg) {
     let s = document.getElementById('snackbar');
@@ -80,14 +90,18 @@ const UI = {
 
   // ===== HISTORY LIST (grouped by day) =====
   renderList() {
-    const filtered = FT.tx.filter(tx => {
+    const base = FT.tx.filter(tx => {
       const d = new Date(tx.date);
       if (d.getMonth() !== FT.month || d.getFullYear() !== FT.year) return false;
       if (tx.type === 'Inversión') return false;
       if (FT.filter === 'all') return true;
       if (FT.filter === 'Común') return tx.scope === 'Común';
       return tx.type === FT.filter;
-    }).sort((a, b) => new Date(b.date) - new Date(a.date));
+    });
+
+    this.renderHistoryCategorySummary(base);
+
+    const filtered = base.sort((a, b) => new Date(b.date) - new Date(a.date));
 
     const list = document.getElementById('txList');
 
@@ -113,11 +127,53 @@ const UI = {
       const dayTotal = txs.reduce((s, t) => s + (t.type === 'Gasto' ? -t.amount : t.amount), 0);
       const sign = dayTotal >= 0 ? '+' : '−';
 
-      html += `<div class="day-header"><span class="dh-date">${wday} ${dayNum}</span><span class="dh-total">${sign}€${Math.abs(dayTotal).toFixed(2)}</span></div>`;
+      html += `<div class="day-header"><span class="dh-date">${wday} ${dayNum}</span><span class="dh-total">${sign}${fmtMoneyAbs(dayTotal)}</span></div>`;
       html += txs.map(tx => this._txCard(tx)).join('');
     }
 
     list.innerHTML = html;
+  },
+
+  renderHistoryCategorySummary(baseItems) {
+    const box = document.getElementById('historyCatSummary');
+    if (!box) return;
+
+    if (!FT.historyCatSummaryEnabled) {
+      box.style.display = 'none';
+      return;
+    }
+
+    box.style.display = 'flex';
+
+    if (!baseItems.length) {
+      box.innerHTML = '<div class="empty" style="padding:16px"><p>Sin datos para agrupar por categoría.</p></div>';
+      return;
+    }
+
+    const groups = {};
+    baseItems.forEach(tx => {
+      if (!tx.category) return;
+      if (!groups[tx.category]) groups[tx.category] = { total: 0, count: 0 };
+      const signed = tx.type === 'Gasto' ? -tx.amount : tx.amount;
+      groups[tx.category].total += signed;
+      groups[tx.category].count++;
+    });
+
+    const sorted = Object.entries(groups).sort((a, b) => Math.abs(b[1].total) - Math.abs(a[1].total));
+    box.innerHTML = sorted.map(([name, data]) => {
+      const ic = catIcon(name);
+      const positive = data.total >= 0;
+      const sign = positive ? '+' : '−';
+      const colorCls = positive ? 'inc-color' : 'exp-color';
+      return `<div class="ytd-cat-card">
+        <div class="yc-icon"><span class="msr">${ic}</span></div>
+        <div class="yc-info">
+          <div class="yc-name">${name}</div>
+          <div class="yc-count">${data.count} movimiento${data.count !== 1 ? 's' : ''}</div>
+        </div>
+        <div class="yc-amount ${colorCls} num">${sign}${fmtMoneyAbs(data.total)}</div>
+      </div>`;
+    }).join('');
   },
 
   _renderBatch(container, items, offset) {
@@ -157,7 +213,7 @@ const UI = {
     return `<div class="tx-card">
       <div class="tx-ava ${cls}"><span class="msr filled">${ic}</span></div>
       <div class="tx-body"><div class="${descCls}">${desc}</div><div class="tx-m">${tx.category}${sub} ${recBadge}${comBadge}</div></div>
-      <div class="tx-v num ${cls}">${sign}€${tx.amount.toFixed(2)}</div>
+      <div class="tx-v num ${cls}">${sign}${fmtMoneyAbs(tx.amount)}</div>
       <div class="tx-actions">
         <button class="tx-act" onclick="App.openEdit('${tx.id}')" title="Editar"><span class="msr">edit</span></button>
         <button class="tx-act" onclick="App.deleteEntry('${tx.id}')" title="Eliminar"><span class="msr">delete</span></button>
@@ -176,11 +232,11 @@ const UI = {
     const exp = mt.filter(t => t.type === 'Gasto').reduce((s, t) => s + t.amount, 0);
     const bal = inc - exp;
 
-    document.getElementById('sumInc').textContent = '€' + inc.toFixed(2);
-    document.getElementById('sumExp').textContent = '€' + exp.toFixed(2);
+    document.getElementById('sumInc').textContent = fmtMoney(inc);
+    document.getElementById('sumExp').textContent = fmtMoney(exp);
 
     const bEl = document.getElementById('sumBal');
-    bEl.textContent = (bal >= 0 ? '+' : '−') + '€' + Math.abs(bal).toFixed(2);
+    bEl.textContent = fmtMoneySigned(bal);
     bEl.className = 'bh-val num-lg ' + (bal > 0 ? 'positive' : bal < 0 ? 'negative' : '');
   },
 
@@ -196,7 +252,7 @@ const UI = {
 
     const monthlyTotal = active.reduce((s, x) => s + monthlyAmount(x), 0);
 
-    document.getElementById('subsTotal').textContent = '€' + monthlyTotal.toFixed(2);
+    document.getElementById('subsTotal').textContent = fmtMoney(monthlyTotal);
     const ac = active.length;
     document.getElementById('subsCount').textContent = ac + ' activa' + (ac !== 1 ? 's' : '');
 
@@ -236,7 +292,7 @@ const UI = {
           ${nextHtml}
         </div>
         <div class="sc-right">
-          <span class="sc-price num">€${s.amount.toFixed(2)}</span>
+          <span class="sc-price num">${fmtMoney(s.amount)}</span>
           <div class="sc-actions">
             <button class="tx-act" onclick="App.openEditTemplate('${s.id}')" title="Editar"><span class="msr">edit</span></button>
             <button class="tx-act" onclick="App.deleteTemplate('${s.id}')" title="Eliminar"><span class="msr">delete</span></button>
@@ -257,7 +313,7 @@ const UI = {
     }).sort((a, b) => new Date(b.date) - new Date(a.date));
 
     const total = items.reduce((s, t) => s + t.amount, 0);
-    document.getElementById('invTotal').textContent = '€' + total.toFixed(2);
+    document.getElementById('invTotal').textContent = fmtMoney(total);
     document.getElementById('invCount').textContent = items.length + ' aportacion' + (items.length !== 1 ? 'es' : '');
 
     const list = document.getElementById('invList');
@@ -277,7 +333,7 @@ const UI = {
       return `<div class="tx-card">
         <div class="tx-ava inversion"><span class="msr filled">${ic}</span></div>
         <div class="tx-body"><div class="${descCls}">${desc}</div><div class="tx-m">${tx.category}${sub} · ${ds}</div></div>
-        <div class="tx-v num inversion">€${tx.amount.toFixed(2)}</div>
+        <div class="tx-v num inversion">${fmtMoney(tx.amount)}</div>
         <div class="tx-actions">
           <button class="tx-act" onclick="App.openEdit('${tx.id}')" title="Editar"><span class="msr">edit</span></button>
           <button class="tx-act" onclick="App.deleteEntry('${tx.id}')" title="Eliminar"><span class="msr">delete</span></button>
@@ -406,7 +462,7 @@ const UI = {
           <div class="yc-bar"><div class="yc-bar-fill ${fillCls}" style="width:${pct}%"></div></div>
           <div class="yc-count">${data.count} movimiento${data.count !== 1 ? 's' : ''}</div>
         </div>
-        <div class="yc-amount ${colorCls} num">€${data.total.toFixed(2)}</div>
+        <div class="yc-amount ${colorCls} num">${fmtMoney(data.total)}</div>
       </div>`;
     }).join('');
   },
@@ -420,5 +476,17 @@ const UI = {
   showError(containerId, msg) {
     document.getElementById(containerId).innerHTML =
       `<div class="empty"><span class="msr">warning</span><p>${msg}</p></div>`;
+  },
+
+  renderMonthlyInsights(items) {
+    const list = document.getElementById('monthInsightsList');
+    if (!list) return;
+    if (!items || !items.length) {
+      list.innerHTML = '<div class="insight-item"><span class="msr">info</span><p>Sin insights para este mes.</p></div>';
+      return;
+    }
+    list.innerHTML = items.map(i => (
+      `<div class="insight-item"><span class="msr">${i.icon || 'insights'}</span><p>${i.text}</p></div>`
+    )).join('');
   }
 };
