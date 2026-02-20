@@ -11,8 +11,6 @@ const FT = {
 
   // Filters
   filter: 'all',
-  historyCatSummaryEnabled: false,
-  forecastMonthsBack: 6,
   subFilter: 'all',
   subCycleFilter: 'all',
 
@@ -101,25 +99,6 @@ function calcNextDate(dateStr, freq) {
 
 function esc(s) {
   return s.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-}
-
-const MONEY_FMT = new Intl.NumberFormat('es-ES', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2
-});
-
-function fmtMoney(v) {
-  const n = Number(v) || 0;
-  return `${MONEY_FMT.format(n)}€`;
-}
-
-function fmtMoneyAbs(v) {
-  return fmtMoney(Math.abs(Number(v) || 0));
-}
-
-function fmtMoneySigned(v) {
-  const n = Number(v) || 0;
-  return `${n >= 0 ? '+' : '−'}${fmtMoneyAbs(n)}`;
 }
 
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',

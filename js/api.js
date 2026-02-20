@@ -1,13 +1,5 @@
 // ===== FinTrack API Module =====
 
-function normLower(v) {
-  return String(v ?? '').toLowerCase().trim();
-}
-
-function sameId(a, b) {
-  return String(a ?? '').trim() === String(b ?? '').trim();
-}
-
 const API = {
   getUrl() {
     return localStorage.getItem('ft_url') || '';
@@ -19,17 +11,15 @@ const API = {
 
   // ===== READ =====
 
-  async loadMonth(year, month, force = false) {
+  async loadMonth(year, month) {
     const url = this.getUrl();
     if (!url) return null;
 
-    // Check cache first unless manual force-refresh
-    if (!force) {
-      const cached = Cache.get(year, month);
-      if (cached) {
-        FT.tx = cached;
-        return cached;
-      }
+    // Check cache first
+    const cached = Cache.get(year, month);
+    if (cached) {
+      FT.tx = cached;
+      return cached;
     }
 
     const res = await fetch(`${url}?action=getMonth&year=${year}&month=${month + 1}`);
@@ -39,10 +29,8 @@ const API = {
       id: r[0], date: r[1], type: r[2], scope: r[3],
       category: r[4], subcategory: r[5] || '',
       description: r[6] || '', amount: parseFloat(r[7]) || 0,
-      recurrence: normLower(r[8]),
-      frequency: normLower(r[9]),
-      templateId: r[10] || '',
-      status: normLower(r[11]) || 'activo'
+      recurrence: r[8] || '', frequency: r[9] || '',
+      templateId: r[10] || '', status: r[11] || 'activo'
     })).filter(t => t.status === 'activo');
 
     Cache.set(year, month, items);
@@ -59,13 +47,9 @@ const API = {
     FT.templates = (rows || []).map(r => ({
       id: r[0], type: r[1], scope: r[2], category: r[3],
       subcategory: r[4], description: r[5],
-      amount: parseFloat(r[6]) || 0,
-      recurrence: normLower(r[7]),
-      frequency: normLower(r[8]),
-      dayOfCharge: parseInt(r[9], 10) || 1,
-      start: r[10],
-      next: r[11],
-      status: normLower(r[12]) || 'activo'
+      amount: parseFloat(r[6]) || 0, recurrence: r[7],
+      frequency: r[8], dayOfCharge: parseInt(r[9]) || 1,
+      start: r[10], next: r[11], status: r[12] || 'activo'
     }));
 
     FT.tplLoaded = true;
@@ -88,13 +72,13 @@ const API = {
   },
 
   // Load everything needed on startup
-  async loadAll(force = false) {
+  async loadAll() {
     const url = this.getUrl();
     if (!url) throw new Error('No URL');
 
     // Parallel load
     const [monthData, templates, categories] = await Promise.all([
-      this.loadMonth(FT.year, FT.month, force),
+      this.loadMonth(FT.year, FT.month),
       this.loadTemplates(),
       this.loadCategories()
     ]);
@@ -122,10 +106,8 @@ const API = {
       id: entry.id, date: entry.fecha, type: entry.tipo,
       scope: entry.ambito, category: entry.categoria,
       subcategory: entry.subcategoria, description: entry.descripcion,
-      amount: entry.importe,
-      recurrence: normLower(entry.recurrencia),
-      frequency: normLower(entry.frecuencia),
-      templateId: entry.plantilla_id || '',
+      amount: entry.importe, recurrence: entry.recurrencia || '',
+      frequency: entry.frecuencia || '', templateId: entry.plantilla_id || '',
       status: 'activo'
     });
     Cache.invalidateCurrent();
@@ -138,8 +120,7 @@ const API = {
       id: tpl.plantilla_id, type: tpl.tipo, scope: tpl.ambito,
       category: tpl.categoria, subcategory: tpl.subcategoria,
       description: tpl.descripcion, amount: tpl.importe,
-      recurrence: normLower(tpl.recurrencia),
-      frequency: normLower(tpl.frecuencia),
+      recurrence: tpl.recurrencia, frequency: tpl.frecuencia,
       dayOfCharge: tpl.dia_cobro, start: tpl.inicio,
       next: tpl.proxima, status: 'activo'
     });
@@ -179,30 +160,26 @@ const API = {
 
   async toggleTemplate(pid, activate) {
     const action = activate ? 'activateTemplate' : 'pauseTemplate';
-    const sid = String(pid ?? '').trim();
-    await this.post({ action, plantilla_id: sid, id: sid });
-    const t = FT.templates.find(x => sameId(x.id, sid));
+    await this.post({ action, plantilla_id: pid });
+    const t = FT.templates.find(x => x.id === pid);
     if (t) t.status = activate ? 'activo' : 'pausado';
   },
 
   async updateTemplate(pid, fields) {
-    const sid = String(pid ?? '').trim();
-    await this.post({ action: 'updateTemplate', plantilla_id: sid, id: sid, ...fields });
-    const t = FT.templates.find(x => sameId(x.id, sid));
+    await this.post({ action: 'updateTemplate', plantilla_id: pid, ...fields });
+    const t = FT.templates.find(x => x.id === pid);
     if (t) {
       if (fields.descripcion !== undefined) t.description = fields.descripcion;
       if (fields.importe !== undefined) t.amount = fields.importe;
       if (fields.categoria !== undefined) t.category = fields.categoria;
       if (fields.subcategoria !== undefined) t.subcategory = fields.subcategoria;
-      if (fields.frecuencia !== undefined) t.frequency = normLower(fields.frecuencia);
+      if (fields.frecuencia !== undefined) t.frequency = fields.frecuencia;
       if (fields.dia_cobro !== undefined) t.dayOfCharge = fields.dia_cobro;
     }
   },
 
   async deleteTemplate(pid) {
-    const sid = String(pid ?? '').trim();
-    // Compatibility payload: some GAS scripts read plantilla_id, others id.
-    await this.post({ action: 'deleteTemplate', plantilla_id: sid, id: sid });
-    FT.templates = FT.templates.filter(x => !sameId(x.id, sid));
+    await this.post({ action: 'deleteTemplate', plantilla_id: pid });
+    FT.templates = FT.templates.filter(x => x.id !== pid);
   }
 };

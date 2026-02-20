@@ -6,17 +6,13 @@
 <meta name="theme-color" content="#1C1126">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
 <title>FinTrack</title>
-<link rel="manifest" href="./manifest.webmanifest">
-<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
-<link rel="icon" type="image/svg+xml" href="./favicon.svg">
-<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@100..900&family=Google+Sans:wght@400;500;700&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./css/app.css">
+<link rel="stylesheet" href="css/app.css">
 </head>
 <body>
 <div class="app-shell">
@@ -26,10 +22,9 @@
     <span class="top-bar-title">FinTrack</span>
     <div class="top-bar-actions">
       <button class="icon-btn" onclick="App.toggleConfig()"><span class="msr">settings</span></button>
-      <button class="icon-btn" onclick="App.loadAll(true)"><span class="msr">sync</span></button>
+      <button class="icon-btn" onclick="App.loadAll()"><span class="msr">sync</span></button>
     </div>
   </header>
-  <div class="sync-status" id="syncStatus"><span class="msr">cloud_done</span><span id="syncStatusText">Sin sincronizar</span></div>
 
   <!-- CONFIG -->
   <div class="config-sheet" id="configSheet">
@@ -44,8 +39,8 @@
     <div class="bottom-nav-inner">
       <button class="bnav-item active" data-t="form" onclick="App.goTab('form')"><span class="pill"></span><span class="msr">add_circle</span><span>Registrar</span></button>
       <button class="bnav-item" data-t="history" onclick="App.goTab('history')"><span class="pill"></span><span class="msr">receipt_long</span><span>Historial</span></button>
-      <button class="bnav-item" data-t="subs" onclick="App.goTab('subs')"><span class="pill"></span><span class="msr">autorenew</span><span>Recurrentes</span></button>
-      <button class="bnav-item" data-t="invest" onclick="App.goTab('invest')"><span class="pill"></span><span class="msr">account_balance_wallet</span><span>Inversi&#243;n</span></button>
+      <button class="bnav-item" data-t="subs" onclick="App.goTab('subs')"><span class="pill"></span><span class="msr">autorenew</span><span>Suscripciones</span></button>
+      <button class="bnav-item" data-t="status" onclick="App.goTab('status')"><span class="pill"></span><span class="msr">bid_landscape</span><span>Status</span></button>
     </div>
   </nav>
 
@@ -132,39 +127,35 @@
     <div class="balance-hero" id="balanceHero">
       <div class="bh-main">
         <div class="bh-label">Balance del mes</div>
-        <div class="bh-val num-lg" id="sumBal">0,00€</div>
+        <div class="bh-val num-lg" id="sumBal">&#8364;0</div>
       </div>
       <div class="bh-row">
-        <div class="bh-item"><span class="msr" style="font-size:16px;color:var(--inc)">arrow_upward</span><span class="bh-amount num pos" id="sumInc">0,00€</span><span class="bh-tag">Ingresos</span></div>
-        <div class="bh-item"><span class="msr" style="font-size:16px;color:var(--exp)">arrow_downward</span><span class="bh-amount num neg" id="sumExp">0,00€</span><span class="bh-tag">Gastos</span></div>
+        <div class="bh-item"><span class="msr" style="font-size:16px;color:var(--inc)">arrow_upward</span><span class="bh-amount num pos" id="sumInc">&#8364;0</span><span class="bh-tag">Ingresos</span></div>
+        <div class="bh-item"><span class="msr" style="font-size:16px;color:var(--exp)">arrow_downward</span><span class="bh-amount num neg" id="sumExp">&#8364;0</span><span class="bh-tag">Gastos</span></div>
       </div>
     </div>
-    <div class="history-cta-row">
-      <button class="ytd-btn half" onclick="App.openYTD()"><span class="msr">bar_chart</span> Ver Balance YTD</button>
-      <button class="ytd-btn half" onclick="App.openForecast()"><span class="msr">trending_up</span> Mes promedio</button>
-    </div>
+    <button class="ytd-btn" onclick="App.openYTD()"><span class="msr">bar_chart</span> Ver Balance YTD</button>
     <div class="filter-row">
       <button class="fchip active" data-f="all" onclick="App.setFilter('all')">Todos</button>
       <button class="fchip" data-f="Gasto" onclick="App.setFilter('Gasto')">Gastos</button>
       <button class="fchip" data-f="Ingreso" onclick="App.setFilter('Ingreso')">Ingresos</button>
       <button class="fchip" data-f="Com&#250;n" onclick="App.setFilter('Com&#250;n')">Comunes</button>
-      <button class="fchip" data-hf="cat" onclick="App.toggleHistoryCategoryFilter()">Categor&#237;as</button>
-    </div>
-    <div id="historyCatSummary" class="ytd-cat-list history-cat-summary" style="display:none"></div>
-    <div class="insights-box" id="monthInsights">
-      <div class="ytd-section-title"><span class="msr" style="font-size:18px">insights</span> Insights del mes</div>
-      <div id="monthInsightsList" class="insights-list"></div>
     </div>
     <div class="tx-list" id="txList">
       <div class="empty"><span class="msr">database</span><p>Configura tu Apps Script<br>para ver tus movimientos</p></div>
     </div>
   </section>
 
+  <!-- ========== STATUS ========== -->
+  <section class="section" id="sec-status">
+    <div class="empty"><span class="msr">bid_landscape</span><p>Status (pr&#243;ximamente)</p></div>
+  </section>
+
   <!-- ========== RECURRENTES ========== -->
   <section class="section" id="sec-subs">
     <div class="subs-hero">
       <div class="sh-label">Gasto mensual recurrente</div>
-      <div class="sh-val num-lg" id="subsTotal">0,00€</div>
+      <div class="sh-val num-lg" id="subsTotal">&#8364;0,00</div>
       <div class="sh-count" id="subsCount">0 activas</div>
     </div>
     <div class="subs-filter">
@@ -188,7 +179,7 @@
   <section class="section" id="sec-invest">
     <div class="inv-hero">
       <div class="ih-label">Total invertido este mes</div>
-      <div class="ih-val num-lg" id="invTotal">0,00€</div>
+      <div class="ih-val num-lg" id="invTotal">&#8364;0,00</div>
       <div class="ih-sub" id="invCount">0 aportaciones</div>
     </div>
     <div class="month-pill">
@@ -209,10 +200,10 @@
     </div>
     <div class="ytd-hero">
       <div class="bh-label">Balance acumulado del a&#241;o</div>
-      <div class="bh-val num-lg" id="ytdBalance">0,00€</div>
+      <div class="bh-val num-lg" id="ytdBalance">&#8364;0</div>
       <div class="ytd-row">
-        <div class="ytd-item inc"><span class="msr" style="font-size:16px">arrow_upward</span><span class="num" id="ytdInc">0,00€</span><span class="ytd-tag">Ingresos</span></div>
-        <div class="ytd-item exp"><span class="msr" style="font-size:16px">arrow_downward</span><span class="num" id="ytdExp">0,00€</span><span class="ytd-tag">Gastos</span></div>
+        <div class="ytd-item inc"><span class="msr" style="font-size:16px">arrow_upward</span><span class="num" id="ytdInc">&#8364;0</span><span class="ytd-tag">Ingresos</span></div>
+        <div class="ytd-item exp"><span class="msr" style="font-size:16px">arrow_downward</span><span class="num" id="ytdExp">&#8364;0</span><span class="ytd-tag">Gastos</span></div>
       </div>
     </div>
     <div class="ytd-section-title"><span class="msr" style="font-size:18px">arrow_downward</span> Gastos por categor&#237;a</div>
@@ -220,31 +211,6 @@
     <div class="ytd-section-title" style="margin-top:20px"><span class="msr" style="font-size:18px">arrow_upward</span> Ingresos por categor&#237;a</div>
     <div id="ytdIncCats" class="ytd-cat-list"></div>
     <div class="ytd-loading" id="ytdLoading" style="display:none"><span class="spinner"></span> Cargando datos del a&#241;o...</div>
-  </section>
-
-  <!-- ========== PREDICCI&#211;N MENSUAL ========== -->
-  <section class="section" id="sec-forecast">
-    <div class="ytd-header">
-      <button class="icon-btn" onclick="App.closeForecast()"><span class="msr">arrow_back</span></button>
-      <span class="ytd-title">Predicci&#243;n — <span id="forecastMonthLabel">Mes siguiente</span></span>
-    </div>
-    <div class="ytd-hero">
-      <div class="bh-label">Mes promedio esperado</div>
-      <div class="bh-val num-lg" id="forecastBalance">0,00€</div>
-      <div class="ytd-row">
-        <div class="ytd-item inc"><span class="msr" style="font-size:16px">arrow_upward</span><span class="num" id="forecastInc">0,00€</span><span class="ytd-tag">Ingresos</span></div>
-        <div class="ytd-item exp"><span class="msr" style="font-size:16px">arrow_downward</span><span class="num" id="forecastExp">0,00€</span><span class="ytd-tag">Gastos</span></div>
-      </div>
-    </div>
-    <div class="ytd-section-title"><span class="msr" style="font-size:18px">insights</span> Base del c&#225;lculo</div>
-    <div class="filter-row forecast-range-row">
-      <button class="fchip" data-fm="3" onclick="App.setForecastMonthsBack(3)">3 meses</button>
-      <button class="fchip active" data-fm="6" onclick="App.setForecastMonthsBack(6)">6 meses</button>
-      <button class="fchip" data-fm="12" onclick="App.setForecastMonthsBack(12)">12 meses</button>
-    </div>
-    <div class="forecast-info" id="forecastInfo"></div>
-    <div id="forecastMonths" class="ytd-cat-list"></div>
-    <div class="ytd-loading" id="forecastLoading" style="display:none"><span class="spinner"></span> Calculando promedio...</div>
   </section>
 
 </div>
@@ -323,9 +289,9 @@
 <div class="snackbar" id="snackbar"></div>
 
 <!-- JS Modules -->
-<script src="./js/state.js"></script>
-<script src="./js/api.js"></script>
-<script src="./js/ui.js"></script>
-<script src="./js/app.js"></script>
+<script src="js/state.js"></script>
+<script src="js/api.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>
