@@ -175,6 +175,7 @@ body.app-loading .app-shell{filter:blur(4px);pointer-events:none;user-select:non
 .tx-badge{display:inline-flex;align-items:center;gap:2px;padding:2px 7px;border-radius:var(--r-xs);font-size:.58rem;font-weight:600;letter-spacing:.3px}
 .tx-badge.rec{background:var(--md-tertiary-c);color:var(--md-on-tertiary-c)}
 .tx-badge.common{background:var(--md-secondary-c);color:var(--md-on-secondary-c)}
+.tx-badge.comp{background:var(--md-surface-chst);color:var(--md-on-surface)}
 .tx-badge .msr{font-size:11px}
 .tx-v{font-size:1rem;flex-shrink:0}
 .tx-v.expense{color:var(--exp)}.tx-v.income{color:var(--inc)}.tx-v.inversion{color:var(--inv)}

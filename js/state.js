@@ -197,6 +197,22 @@ function catIcon(name) {
   return c ? c.icono : 'label';
 }
 
+function normText(v) {
+  return String(v || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function isCompensatingBizum(tx) {
+  if (!tx) return false;
+  return tx.type === 'Ingreso' &&
+    normText(tx.category) === 'reembolsos' &&
+    normText(tx.subcategory) === 'bizum' &&
+    !!String(tx.templateId || '').trim();
+}
+
 // Monthly cost normalization for templates
 function monthlyAmount(tpl) {
   const mult = { mensual: 1, trimestral: 1 / 3, semestral: 1 / 6, anual: 1 / 12 }[tpl.frequency] || 1;

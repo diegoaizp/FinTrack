@@ -2,6 +2,7 @@
 
 const App = {
   _statusSeq: 0,
+  _reimbCandidates: [],
 
   async _withLoading(msg, fn) {
     UI.showGlobalLoading(msg);
@@ -39,6 +40,8 @@ const App = {
       if (e.key === 'Enter' && e.target.id === 'customCatInput') this.addCustomCat();
       if (e.key === 'Enter' && e.target.id === 'customSubInput') this.addCustomSub();
     });
+
+    document.getElementById('inputDate').addEventListener('change', () => this.refreshReimbCandidates());
   },
 
   // ===== DATA LOADING =====
@@ -49,6 +52,7 @@ const App = {
       // Phase 1: unlock register form as soon as categories are ready.
       await API.loadCategories();
       UI.renderCats();
+      this.updateReimbUI();
       UI.hideGlobalLoading();
 
       // Phase 2: load the rest in background.
@@ -132,6 +136,7 @@ const App = {
     this.toggleRec();
 
     UI.renderCats();
+    this.updateReimbUI();
   },
 
   // ===== SCOPE =====
@@ -169,12 +174,133 @@ const App = {
     FT.sub = '';
     this.hideCustom();
     UI.renderCats();
+    this.updateReimbUI();
   },
 
   pickSub(s) {
     FT.sub = s;
     document.getElementById('customSubRow').classList.remove('show');
     UI.renderSubcats();
+    this.updateReimbUI();
+  },
+
+  _isBizumReembolso() {
+    return FT.type === 'Ingreso' &&
+      normText(FT.cat) === 'reembolsos' &&
+      normText(FT.sub) === 'bizum';
+  },
+
+  toggleReimb() {
+    const on = !!document.getElementById('isReimb').checked;
+    document.getElementById('reimbOpts').style.display = on ? '' : 'none';
+    if (on) this.refreshReimbCandidates();
+  },
+
+  updateReimbUI() {
+    const group = document.getElementById('reimbGroup');
+    const check = document.getElementById('isReimb');
+    const opts = document.getElementById('reimbOpts');
+    if (!group || !check || !opts) return;
+
+    const show = this._isBizumReembolso();
+    group.style.display = show ? '' : 'none';
+    if (!show) {
+      check.checked = false;
+      opts.style.display = 'none';
+      document.getElementById('reimbExpense').innerHTML = '<option value="">Selecciona un gasto</option>';
+      document.getElementById('reimbHint').textContent = '';
+    }
+  },
+
+  async refreshReimbCandidates() {
+    if (!this._isBizumReembolso()) return;
+    if (!document.getElementById('isReimb').checked) return;
+
+    const url = API.getUrl();
+    if (!url) return;
+
+    const sel = document.getElementById('reimbExpense');
+    const hint = document.getElementById('reimbHint');
+    const selected = sel.value;
+    sel.innerHTML = '<option value="">Cargando...</option>';
+    hint.textContent = 'Buscando gastos recientes...';
+
+    const baseDate = document.getElementById('inputDate').value || todayStr();
+    const pivot = new Date(baseDate + 'T12:00:00');
+    if (isNaN(pivot.getTime())) return;
+
+    try {
+      const jobs = [];
+      for (let i = 0; i < 6; i++) {
+        const d = new Date(pivot.getFullYear(), pivot.getMonth() - i, 1);
+        jobs.push(
+          fetch(`${url}?action=getMonth&year=${d.getFullYear()}&month=${d.getMonth() + 1}`)
+            .then(r => r.json())
+            .then(rows => (rows || []).map(r => ({
+              id: String(r[0] || ''),
+              date: String(r[1] || ''),
+              type: String(r[2] || ''),
+              category: String(r[4] || ''),
+              subcategory: String(r[5] || ''),
+              description: String(r[6] || ''),
+              amount: parseAmount(r[7]),
+              status: String(r[11] || 'activo').toLowerCase().trim()
+            })).filter(x => x.status === 'activo' && x.type === 'Gasto' && x.amount > 0))
+        );
+      }
+
+      const results = await Promise.all(jobs);
+      this._reimbCandidates = results.flat().sort((a, b) => {
+        const byDate = new Date(b.date) - new Date(a.date);
+        if (byDate !== 0) return byDate;
+        return b.id.localeCompare(a.id);
+      });
+
+      if (!this._reimbCandidates.length) {
+        sel.innerHTML = '<option value="">No hay gastos para compensar</option>';
+        hint.textContent = 'No se encontraron gastos activos en los últimos 6 meses.';
+        return;
+      }
+
+      sel.innerHTML = ['<option value="">Selecciona un gasto</option>']
+        .concat(this._reimbCandidates.map(x => {
+          const sub = x.subcategory ? ` / ${x.subcategory}` : '';
+          const desc = x.description || `${x.category}${sub}`;
+          return `<option value="${esc(x.id)}">${x.date} · ${desc} · ${formatEUR(x.amount)}</option>`;
+        }))
+        .join('');
+
+      if (selected && this._reimbCandidates.some(x => x.id === selected)) {
+        sel.value = selected;
+      }
+      hint.textContent = 'El importe del Bizum reducirá este gasto.';
+    } catch (e) {
+      sel.innerHTML = '<option value="">Error al cargar gastos</option>';
+      hint.textContent = 'No se pudieron cargar los gastos para compensar.';
+    }
+  },
+
+  async _findExpenseById(expenseId, baseDateStr) {
+    const url = API.getUrl();
+    if (!url || !expenseId) return null;
+
+    const base = new Date((baseDateStr || todayStr()) + 'T12:00:00');
+    if (isNaN(base.getTime())) return null;
+
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
+      try {
+        const rows = await fetch(`${url}?action=getMonth&year=${d.getFullYear()}&month=${d.getMonth() + 1}`).then(r => r.json());
+        const found = (rows || []).map(r => ({
+          id: String(r[0] || ''),
+          type: String(r[2] || ''),
+          amount: parseAmount(r[7]),
+          status: String(r[11] || 'activo').toLowerCase().trim()
+        })).find(x => x.id === expenseId && x.status === 'activo' && x.type === 'Gasto');
+        if (found) return found;
+      } catch (e) {}
+    }
+    return null;
   },
 
   showCustom(which) {
@@ -230,8 +356,12 @@ const App = {
     const date = document.getElementById('inputDate').value;
     const isRec = document.getElementById('isRec').checked;
     const day = parseInt(document.getElementById('inputDay').value) || 1;
+    const isReimb = this._isBizumReembolso() && document.getElementById('isReimb').checked;
+    const reimbId = isReimb ? document.getElementById('reimbExpense').value : '';
+    const reimbTarget = isReimb ? this._reimbCandidates.find(x => x.id === reimbId) : null;
 
     if (!amount || amount <= 0) { UI.snack('Introduce un importe'); return; }
+    if (isReimb && !reimbTarget) { UI.snack('Selecciona el gasto a compensar'); return; }
 
     const btn = document.getElementById('floatingRegister');
     btn.disabled = true;
@@ -249,7 +379,7 @@ const App = {
       importe: amount,
       recurrencia: isRec ? FT.recType : '',
       frecuencia: isRec ? FT.freq : '',
-      plantilla_id: '',
+      plantilla_id: isReimb ? reimbTarget.id : '',
       estado: 'activo',
       creado: nowISO(),
       modificado: nowISO()
@@ -258,6 +388,17 @@ const App = {
     await this._withLoading('Guardando movimiento...', async () => {
       try {
         await API.addMovimiento(entry);
+        if (isReimb && reimbTarget) {
+          const newAmount = Math.max(0, parseAmount(reimbTarget.amount) - amount);
+          await API.updateMovimiento(reimbTarget.id, {
+            importe: newAmount,
+            modificado: nowISO()
+          });
+          if (reimbTarget.date) {
+            const d = new Date(reimbTarget.date + 'T12:00:00');
+            if (!isNaN(d.getTime())) Cache.invalidate(d.getFullYear(), d.getMonth());
+          }
+        }
 
         // Create template if recurrent
         if (isRec) {
@@ -289,6 +430,8 @@ const App = {
         document.getElementById('inputDate').value = todayStr();
         document.getElementById('isRec').checked = false;
         this.toggleRec();
+        document.getElementById('isReimb').checked = false;
+        this.toggleReimb();
 
         UI.renderList();
         UI.updateSummary();
@@ -505,6 +648,10 @@ const App = {
   openEdit(id) {
     const tx = FT.tx.find(t => t.id === id);
     if (!tx) return;
+    if (isCompensatingBizum(tx)) {
+      UI.snack('Este Bizum compensatorio no se puede editar');
+      return;
+    }
     UI.openEditModal(tx);
   },
 
@@ -557,6 +704,22 @@ const App = {
     if (!confirm('¿Eliminar este movimiento?')) return;
     await this._withLoading('Eliminando movimiento...', async () => {
       try {
+        const tx = FT.tx.find(t => t.id === id);
+        if (tx && isCompensatingBizum(tx)) {
+          const linked = await this._findExpenseById(tx.templateId, tx.date);
+          if (!linked) {
+            UI.snack('No se pudo restaurar el gasto vinculado');
+            return;
+          }
+          await API.updateMovimiento(linked.id, {
+            importe: parseAmount(linked.amount) + parseAmount(tx.amount),
+            modificado: nowISO()
+          });
+          if (tx.date) {
+            const d = new Date(tx.date + 'T12:00:00');
+            if (!isNaN(d.getTime())) Cache.invalidate(d.getFullYear(), d.getMonth());
+          }
+        }
         await API.deleteMovimiento(id);
         UI.renderList();
         UI.updateSummary();
@@ -594,6 +757,7 @@ const App = {
               .then(r => r.json())
               .then(rows => (rows || []).map(r => ({
                 type: r[2], category: r[4], subcategory: r[5] || '',
+                templateId: r[10] || '',
                 amount: parseAmount(r[7]), status: String(r[11] || 'activo').toLowerCase().trim()
               })).filter(t => t.status === 'activo'))
           );
@@ -602,7 +766,7 @@ const App = {
         results.forEach(items => allTx.push(...items));
 
         // Calculate totals
-        const incTx = allTx.filter(t => t.type === 'Ingreso');
+        const incTx = allTx.filter(t => t.type === 'Ingreso' && !isCompensatingBizum(t));
         const expTx = allTx.filter(t => t.type === 'Gasto');
         const totalInc = incTx.reduce((s, t) => s + t.amount, 0);
         const totalExp = expTx.reduce((s, t) => s + t.amount, 0);

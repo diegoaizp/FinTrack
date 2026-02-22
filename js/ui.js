@@ -148,7 +148,10 @@ const UI = {
       const d = new Date(dateKey + 'T12:00:00');
       const dayNum = d.getDate();
       const wday = WEEKDAYS[d.getDay()];
-      const dayTotal = txs.reduce((s, t) => s + (t.type === 'Gasto' ? -t.amount : t.amount), 0);
+      const dayTotal = txs.reduce((s, t) => {
+        if (isCompensatingBizum(t)) return s;
+        return s + (t.type === 'Gasto' ? -t.amount : t.amount);
+      }, 0);
       const sign = dayTotal >= 0 ? '+' : '−';
 
       html += `<div class="day-header"><span class="dh-date">${wday} ${dayNum}</span><span class="dh-total">${sign}${formatEUR(Math.abs(dayTotal))}</span></div>`;
@@ -181,7 +184,8 @@ const UI = {
     const cls = isE ? 'expense' : isI ? 'income' : 'inversion';
     const ic = catIcon(tx.category);
     const sub = tx.subcategory ? ' / ' + tx.subcategory : '';
-    const sign = isE ? '−' : '+';
+    const isComp = isCompensatingBizum(tx);
+    const sign = isComp ? '↔' : (isE ? '−' : '+');
     const desc = tx.description || tx.category || 'Sin descripción';
     const descCls = tx.description ? 'tx-t' : 'tx-t no-desc';
 
@@ -191,10 +195,13 @@ const UI = {
     const comBadge = tx.scope === 'Común'
       ? `<span class="tx-badge common"><span class="msr">group</span> Común</span>`
       : '';
+    const compBadge = isComp
+      ? `<span class="tx-badge comp"><span class="msr">sync_alt</span> Compensación</span>`
+      : '';
 
     return `<div class="tx-card">
       <div class="tx-ava ${cls}"><span class="msr filled">${ic}</span></div>
-      <div class="tx-body"><div class="${descCls}">${desc}</div><div class="tx-m">${tx.category}${sub} ${recBadge}${comBadge}</div></div>
+      <div class="tx-body"><div class="${descCls}">${desc}</div><div class="tx-m">${tx.category}${sub} ${recBadge}${comBadge}${compBadge}</div></div>
       <div class="tx-v num ${cls}">${sign}${formatEUR(tx.amount)}</div>
       <div class="tx-actions">
         <button class="tx-act" onclick="App.openEdit('${tx.id}')" title="Editar"><span class="msr">edit</span></button>
@@ -210,7 +217,7 @@ const UI = {
       return d.getMonth() === FT.month && d.getFullYear() === FT.year && tx.type !== 'Inversión';
     });
 
-    const inc = mt.filter(t => t.type === 'Ingreso').reduce((s, t) => s + t.amount, 0);
+    const inc = mt.filter(t => t.type === 'Ingreso' && !isCompensatingBizum(t)).reduce((s, t) => s + t.amount, 0);
     const exp = mt.filter(t => t.type === 'Gasto').reduce((s, t) => s + t.amount, 0);
     const bal = inc - exp;
 

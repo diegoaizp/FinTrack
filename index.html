@@ -90,6 +90,23 @@
       <input class="m3-input" type="date" id="inputDate">
     </div>
 
+    <div class="field-group" id="reimbGroup" style="display:none">
+      <label class="rec-check-row" style="margin-bottom:10px">
+        <input type="checkbox" class="m3-cb" id="isReimb" onchange="App.toggleReimb()">
+        <div class="rec-text">
+          <div class="main">Compensar gasto anterior</div>
+          <div class="hint">Este Bizum no contará como ingreso</div>
+        </div>
+      </label>
+      <div id="reimbOpts" style="display:none">
+        <span class="field-label">Gasto a compensar</span>
+        <select class="m3-input" id="reimbExpense">
+          <option value="">Selecciona un gasto</option>
+        </select>
+        <div class="config-hint" id="reimbHint">Cargando gastos...</div>
+      </div>
+    </div>
+
     <div class="recurrence-box" id="recBox">
       <label class="rec-check-row" id="recCheckRow">
         <input type="checkbox" class="m3-cb" id="isRec" onchange="App.toggleRec()">
