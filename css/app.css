@@ -53,6 +53,8 @@
 }
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Google Sans Flex','Google Sans',system-ui,sans-serif;background:var(--md-surface);color:var(--md-on-surface);min-height:100dvh;overflow-x:hidden;-webkit-font-smoothing:antialiased;padding-bottom:140px}
+.app-shell{transition:filter .2s ease}
+body.app-loading .app-shell{filter:blur(4px);pointer-events:none;user-select:none}
 .msr{font-family:'Material Symbols Rounded';font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;font-size:24px;vertical-align:middle;font-style:normal;display:inline-block;line-height:1;letter-spacing:normal;text-transform:none;white-space:nowrap;direction:ltr;-webkit-font-smoothing:antialiased}
 .msr.filled{font-variation-settings:'FILL' 1,'wght' 500,'GRAD' 0,'opsz' 24}
 .num{font-family:'Google Sans Flex',sans-serif;font-weight:300;letter-spacing:-.5px}
@@ -290,7 +292,17 @@ body{font-family:'Google Sans Flex','Google Sans',system-ui,sans-serif;backgroun
 .ytd-cat-card .yc-amount.exp-color{color:var(--exp)}
 .ytd-cat-card .yc-amount.inc-color{color:var(--inc)}
 .ytd-cat-card .yc-count{font-size:.65rem;color:var(--md-outline);margin-top:2px}
+.status-card .yc-count{margin-top:4px}
+.status-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.status-trend{display:flex;align-items:flex-end;gap:3px;height:20px;margin-top:6px}
+.status-bar{display:inline-block;width:5px;border-radius:3px;background:var(--md-outline-var)}
+.status-bar.up{background:var(--inc)}
+.status-bar.down{background:var(--exp)}
 .ytd-loading{text-align:center;padding:32px;color:var(--md-on-surface-var);font-size:.88rem}
+.global-loader{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:1000;background:rgba(0,0,0,.35)}
+.global-loader.show{display:flex}
+.global-loader-card{display:flex;align-items:center;gap:10px;background:var(--md-surface-cl);border:1px solid var(--md-outline-var);border-radius:var(--r-lg);padding:14px 16px;box-shadow:var(--elev-3);color:var(--md-on-surface)}
+.global-loader .spinner{margin-right:0}
 
 @media(min-width:840px){
   .section{max-width:560px}

@@ -2,6 +2,25 @@
 
 const UI = {
 
+  showGlobalLoading(msg) {
+    const overlay = document.getElementById('globalLoader');
+    const text = document.getElementById('globalLoaderText');
+    FT.loadingCount = (FT.loadingCount || 0) + 1;
+    FT.loading = true;
+    if (text && msg) text.textContent = msg;
+    document.body.classList.add('app-loading');
+    if (overlay) overlay.classList.add('show');
+  },
+
+  hideGlobalLoading() {
+    FT.loadingCount = Math.max(0, (FT.loadingCount || 0) - 1);
+    if (FT.loadingCount > 0) return;
+    FT.loading = false;
+    document.body.classList.remove('app-loading');
+    const overlay = document.getElementById('globalLoader');
+    if (overlay) overlay.classList.remove('show');
+  },
+
   // ===== SNACKBAR =====
   snack(msg) {
     let s = document.getElementById('snackbar');
@@ -34,6 +53,12 @@ const UI = {
     const el = document.getElementById('invMonthLabel');
     if (!el) return;
     el.textContent = MONTHS[FT.invMonth] + ' ' + FT.invYear;
+  },
+
+  updateStatusMonthLabel() {
+    const el = document.getElementById('statusMonthLabel');
+    if (!el) return;
+    el.textContent = MONTHS[FT.statusMonth] + ' ' + FT.statusYear;
   },
 
   // ===== CATEGORIES =====
@@ -89,7 +114,18 @@ const UI = {
       if (FT.filter === 'all') return true;
       if (FT.filter === 'Común') return tx.scope === 'Común';
       return tx.type === FT.filter;
-    }).sort((a, b) => new Date(b.date) - new Date(a.date));
+    }).sort((a, b) => {
+      const byDate = new Date(b.date) - new Date(a.date);
+      if (byDate !== 0) return byDate;
+
+      const aCreated = a.created ? Date.parse(a.created) : NaN;
+      const bCreated = b.created ? Date.parse(b.created) : NaN;
+      if (!Number.isNaN(aCreated) && !Number.isNaN(bCreated) && bCreated !== aCreated) {
+        return bCreated - aCreated;
+      }
+
+      return String(b.id || '').localeCompare(String(a.id || ''));
+    });
 
     const list = document.getElementById('txList');
 
@@ -115,7 +151,7 @@ const UI = {
       const dayTotal = txs.reduce((s, t) => s + (t.type === 'Gasto' ? -t.amount : t.amount), 0);
       const sign = dayTotal >= 0 ? '+' : '−';
 
-      html += `<div class="day-header"><span class="dh-date">${wday} ${dayNum}</span><span class="dh-total">${sign}€${Math.abs(dayTotal).toFixed(2)}</span></div>`;
+      html += `<div class="day-header"><span class="dh-date">${wday} ${dayNum}</span><span class="dh-total">${sign}${formatEUR(Math.abs(dayTotal))}</span></div>`;
       html += txs.map(tx => this._txCard(tx)).join('');
     }
 
@@ -159,7 +195,7 @@ const UI = {
     return `<div class="tx-card">
       <div class="tx-ava ${cls}"><span class="msr filled">${ic}</span></div>
       <div class="tx-body"><div class="${descCls}">${desc}</div><div class="tx-m">${tx.category}${sub} ${recBadge}${comBadge}</div></div>
-      <div class="tx-v num ${cls}">${sign}€${tx.amount.toFixed(2)}</div>
+      <div class="tx-v num ${cls}">${sign}${formatEUR(tx.amount)}</div>
       <div class="tx-actions">
         <button class="tx-act" onclick="App.openEdit('${tx.id}')" title="Editar"><span class="msr">edit</span></button>
         <button class="tx-act" onclick="App.deleteEntry('${tx.id}')" title="Eliminar"><span class="msr">delete</span></button>
@@ -178,11 +214,11 @@ const UI = {
     const exp = mt.filter(t => t.type === 'Gasto').reduce((s, t) => s + t.amount, 0);
     const bal = inc - exp;
 
-    document.getElementById('sumInc').textContent = '€' + inc.toFixed(2);
-    document.getElementById('sumExp').textContent = '€' + exp.toFixed(2);
+    document.getElementById('sumInc').textContent = formatEUR(inc);
+    document.getElementById('sumExp').textContent = formatEUR(exp);
 
     const bEl = document.getElementById('sumBal');
-    bEl.textContent = (bal >= 0 ? '+' : '−') + '€' + Math.abs(bal).toFixed(2);
+    bEl.textContent = formatSignedEUR(bal);
     bEl.className = 'bh-val num-lg ' + (bal > 0 ? 'positive' : bal < 0 ? 'negative' : '');
   },
 
@@ -198,7 +234,7 @@ const UI = {
 
     const monthlyTotal = active.reduce((s, x) => s + monthlyAmount(x), 0);
 
-    document.getElementById('subsTotal').textContent = '€' + monthlyTotal.toFixed(2);
+    document.getElementById('subsTotal').textContent = formatEUR(monthlyTotal);
     const ac = active.length;
     document.getElementById('subsCount').textContent = ac + ' activa' + (ac !== 1 ? 's' : '');
 
@@ -238,7 +274,7 @@ const UI = {
           ${nextHtml}
         </div>
         <div class="sc-right">
-          <span class="sc-price num">€${s.amount.toFixed(2)}</span>
+          <span class="sc-price num">${formatEUR(s.amount)}</span>
           <div class="sc-actions">
             <button class="tx-act" onclick="App.openEditTemplate('${s.id}')" title="Editar"><span class="msr">edit</span></button>
             <button class="tx-act" onclick="App.deleteTemplate('${s.id}')" title="Eliminar"><span class="msr">delete</span></button>
@@ -264,7 +300,7 @@ const UI = {
     }).sort((a, b) => new Date(b.date) - new Date(a.date));
 
     const total = items.reduce((s, t) => s + t.amount, 0);
-    totalEl.textContent = '€' + total.toFixed(2);
+    totalEl.textContent = formatEUR(total);
     countEl.textContent = items.length + ' aportacion' + (items.length !== 1 ? 'es' : '');
     if (!items.length) {
       list.innerHTML = `<div class="empty"><span class="msr">account_balance_wallet</span><p>Sin inversiones en ${MONTHS[FT.invMonth]} ${FT.invYear}</p></div>`;
@@ -282,7 +318,7 @@ const UI = {
       return `<div class="tx-card">
         <div class="tx-ava inversion"><span class="msr filled">${ic}</span></div>
         <div class="tx-body"><div class="${descCls}">${desc}</div><div class="tx-m">${tx.category}${sub} · ${ds}</div></div>
-        <div class="tx-v num inversion">€${tx.amount.toFixed(2)}</div>
+        <div class="tx-v num inversion">${formatEUR(tx.amount)}</div>
         <div class="tx-actions">
           <button class="tx-act" onclick="App.openEdit('${tx.id}')" title="Editar"><span class="msr">edit</span></button>
           <button class="tx-act" onclick="App.deleteEntry('${tx.id}')" title="Eliminar"><span class="msr">delete</span></button>
@@ -411,7 +447,7 @@ const UI = {
           <div class="yc-bar"><div class="yc-bar-fill ${fillCls}" style="width:${pct}%"></div></div>
           <div class="yc-count">${data.count} movimiento${data.count !== 1 ? 's' : ''}</div>
         </div>
-        <div class="yc-amount ${colorCls} num">€${data.total.toFixed(2)}</div>
+        <div class="yc-amount ${colorCls} num">${formatEUR(data.total)}</div>
       </div>`;
     }).join('');
   },
@@ -425,5 +461,58 @@ const UI = {
   showError(containerId, msg) {
     document.getElementById(containerId).innerHTML =
       `<div class="empty"><span class="msr">warning</span><p>${msg}</p></div>`;
+  },
+
+  renderStatus(vm) {
+    const totalEl = document.getElementById('statusTotal');
+    const dateEl = document.getElementById('statusLastDate');
+    const listEl = document.getElementById('statusList');
+    const addBtn = document.getElementById('statusAddBtn');
+    if (!totalEl || !dateEl || !listEl || !addBtn) return;
+
+    totalEl.textContent = formatEUR(vm.total);
+    dateEl.textContent = vm.lastDate ? `Último status: ${vm.lastDate}` : 'Último status: —';
+    addBtn.disabled = !vm.canCreate;
+
+    if (!vm.rows.length) {
+      listEl.innerHTML = '<div class="empty"><span class="msr">database</span><p>Sin cuentas activas.</p></div>';
+      return;
+    }
+
+    listEl.innerHTML = vm.rows.map(r => {
+      const deltaStr = r.deltaNA ? 'N/A' : `${r.delta >= 0 ? '+' : '−'}${formatEUR(Math.abs(r.delta))} (${r.deltaPct}%)`;
+      return `<div class="ytd-cat-card status-card">
+        <div class="yc-icon"><span class="msr">${r.icon || 'account_balance_wallet'}</span></div>
+        <div class="yc-info">
+          <div class="yc-name">${r.name}</div>
+          <div class="yc-count">${r.typeLabel} · Estado actual: ${formatEUR(r.amount)}</div>
+          <div class="yc-count">vs mes anterior: ${deltaStr}</div>
+          <div class="status-trend">${r.trendHtml}</div>
+        </div>
+        <div class="status-right">
+          <div class="yc-amount num">${formatEUR(r.amount)}</div>
+          ${r.latestId ? `<button class="tx-act" onclick="App.openEditStatus('${esc(r.latestId)}')" title="Editar último"><span class="msr">edit</span></button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  renderStatusForm(accounts) {
+    const box = document.getElementById('statusFormRows');
+    if (!box) return;
+    box.innerHTML = accounts.map(a => `
+      <div class="field-group">
+        <span class="field-label">${a.name} (${this.statusTypeLabel(a.type)})</span>
+        <input class="m3-input" data-status-account="${a.id}" type="number" step="0.01" inputmode="decimal" placeholder="0.00">
+      </div>
+    `).join('');
+  },
+
+  statusTypeLabel(t) {
+    const type = String(t || '').toLowerCase();
+    if (type === 'ahorro') return 'Ahorro';
+    if (type === 'liquidez') return 'Liquidez';
+    if (type === 'inversion') return 'Inversión';
+    return type ? type.charAt(0).toUpperCase() + type.slice(1) : '—';
   }
 };

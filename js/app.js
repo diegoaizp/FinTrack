@@ -1,6 +1,16 @@
 // ===== FinTrack App Controller =====
 
 const App = {
+  _statusSeq: 0,
+
+  async _withLoading(msg, fn) {
+    UI.showGlobalLoading(msg);
+    try {
+      return await fn();
+    } finally {
+      UI.hideGlobalLoading();
+    }
+  },
 
   // ===== INIT =====
   async init() {
@@ -9,6 +19,7 @@ const App = {
     document.getElementById('inputDate').value = todayStr();
     UI.updateMonthLabel();
     UI.updateInvMonthLabel();
+    UI.updateStatusMonthLabel();
 
     if (url) {
       this.loadAll();
@@ -33,28 +44,33 @@ const App = {
   // ===== DATA LOADING =====
   async loadAll() {
     UI.showSkeleton('txList');
-    try {
-      await API.loadAll();
-      UI.renderCats();
-      UI.renderList();
-      UI.updateSummary();
-      UI.renderTemplates();
-      UI.renderInvestments();
-      UI.snack('Datos actualizados');
-    } catch (e) {
-      UI.showError('txList', 'Error al cargar datos.<br>Revisa la URL y el despliegue.');
-    }
+    await this._withLoading('Cargando datos...', async () => {
+      try {
+        await API.loadAll();
+        UI.renderCats();
+        UI.renderList();
+        UI.updateSummary();
+        UI.renderTemplates();
+        UI.renderInvestments();
+        await this.loadStatusData({ showGlobal: false, reloadAccounts: true }).catch(() => {});
+        UI.snack('Datos actualizados');
+      } catch (e) {
+        UI.showError('txList', 'Error al cargar datos.<br>Revisa la URL y el despliegue.');
+      }
+    });
   },
 
   async loadCurrentMonth() {
     UI.showSkeleton('txList');
-    try {
-      await API.loadMonth(FT.year, FT.month);
-      UI.renderList();
-      UI.updateSummary();
-    } catch (e) {
-      UI.showError('txList', 'Error al cargar datos.');
-    }
+    await this._withLoading('Cargando historial...', async () => {
+      try {
+        await API.loadMonth(FT.year, FT.month);
+        UI.renderList();
+        UI.updateSummary();
+      } catch (e) {
+        UI.showError('txList', 'Error al cargar datos.');
+      }
+    });
   },
 
   // ===== CONFIG =====
@@ -89,6 +105,7 @@ const App = {
     if (t === 'form') setTimeout(() => document.getElementById('inputAmount').focus(), 150);
     if (t === 'subs') UI.renderTemplates();
     if (t === 'invest') UI.renderInvestments();
+    if (t === 'status') this.loadStatusData({ showGlobal: true });
   },
 
   // ===== TYPE =====
@@ -200,7 +217,7 @@ const App = {
     const url = API.getUrl();
     if (!url) { UI.snack('Configura la URL primero'); return; }
 
-    const amount = parseFloat(document.getElementById('inputAmount').value);
+    const amount = parseAmount(document.getElementById('inputAmount').value);
     const desc = document.getElementById('inputDesc').value.trim();
     const date = document.getElementById('inputDate').value;
     const isRec = document.getElementById('isRec').checked;
@@ -230,48 +247,50 @@ const App = {
       modificado: nowISO()
     };
 
-    try {
-      await API.addMovimiento(entry);
+    await this._withLoading('Guardando movimiento...', async () => {
+      try {
+        await API.addMovimiento(entry);
 
-      // Create template if recurrent
-      if (isRec) {
-        const pid = genId('p');
-        const tpl = {
-          plantilla_id: pid,
-          tipo: entry.tipo,
-          ambito: entry.ambito,
-          categoria: FT.cat,
-          subcategoria: FT.sub,
-          descripcion: desc,
-          importe: amount,
-          recurrencia: FT.recType,
-          frecuencia: FT.freq,
-          dia_cobro: day,
-          inicio: date,
-          proxima: calcNextDate(date, FT.freq),
-          estado: 'activo',
-          creado: nowISO()
-        };
-        await API.addTemplate(tpl);
+        // Create template if recurrent
+        if (isRec) {
+          const pid = genId('p');
+          const tpl = {
+            plantilla_id: pid,
+            tipo: entry.tipo,
+            ambito: entry.ambito,
+            categoria: FT.cat,
+            subcategoria: FT.sub,
+            descripcion: desc,
+            importe: amount,
+            recurrencia: FT.recType,
+            frecuencia: FT.freq,
+            dia_cobro: day,
+            inicio: date,
+            proxima: calcNextDate(date, FT.freq),
+            estado: 'activo',
+            creado: nowISO()
+          };
+          await API.addTemplate(tpl);
+        }
+
+        UI.snack(FT.type + ' registrado');
+
+        // Reset form
+        document.getElementById('inputAmount').value = '';
+        document.getElementById('inputDesc').value = '';
+        document.getElementById('inputDate').value = todayStr();
+        document.getElementById('isRec').checked = false;
+        this.toggleRec();
+
+        UI.renderList();
+        UI.updateSummary();
+        UI.renderInvestments();
+
+        setTimeout(() => document.getElementById('inputAmount').focus(), 100);
+      } catch (e) {
+        UI.snack('Error al enviar');
       }
-
-      UI.snack(FT.type + ' registrado');
-
-      // Reset form
-      document.getElementById('inputAmount').value = '';
-      document.getElementById('inputDesc').value = '';
-      document.getElementById('inputDate').value = todayStr();
-      document.getElementById('isRec').checked = false;
-      this.toggleRec();
-
-      UI.renderList();
-      UI.updateSummary();
-      UI.renderInvestments();
-
-      setTimeout(() => document.getElementById('inputAmount').focus(), 100);
-    } catch (e) {
-      UI.snack('Error al enviar');
-    }
+    });
 
     btn.disabled = false;
     btn.innerHTML = '<span class="msr">check</span> Registrar';
@@ -293,10 +312,152 @@ const App = {
     UI.updateInvMonthLabel();
 
     // Load investment month data
+    await this._withLoading('Cargando inversiones...', async () => {
+      try {
+        await API.loadMonth(FT.invYear, FT.invMonth);
+        UI.renderInvestments();
+      } catch (e) {}
+    });
+  },
+
+  async changeStatusMonth(d) {
+    FT.statusMonth += d;
+    if (FT.statusMonth > 11) { FT.statusMonth = 0; FT.statusYear++; }
+    if (FT.statusMonth < 0) { FT.statusMonth = 11; FT.statusYear--; }
+    UI.updateStatusMonthLabel();
+    await this.loadStatusData({ showGlobal: true });
+  },
+
+  _isCurrentStatusMonth() {
+    const now = new Date();
+    return FT.statusYear === now.getFullYear() && FT.statusMonth === now.getMonth();
+  },
+
+  _latestEntryByAccount(entries) {
+    const by = {};
+    entries.forEach(e => {
+      const prev = by[e.accountId];
+      if (!prev) { by[e.accountId] = e; return; }
+      const prevDate = Date.parse(prev.statusDate || '');
+      const curDate = Date.parse(e.statusDate || '');
+      if (!Number.isNaN(curDate) && (Number.isNaN(prevDate) || curDate >= prevDate)) {
+        by[e.accountId] = e;
+      }
+    });
+    return by;
+  },
+
+  _buildTrend(accountId, monthSeries, perMonthLatest) {
+    let max = 0;
+    const vals = monthSeries.map(m => {
+      const e = perMonthLatest[`${m.y}-${m.m}`]?.[accountId];
+      const v = e ? Number(e.amount || 0) : 0;
+      max = Math.max(max, Math.abs(v));
+      return v;
+    });
+    const top = max || 1;
+    return vals.map(v => {
+      const h = Math.max(3, Math.round((Math.abs(v) / top) * 16));
+      const cls = v >= 0 ? 'up' : 'down';
+      return `<span class="status-bar ${cls}" style="height:${h}px"></span>`;
+    }).join('');
+  },
+
+  async loadStatusData(opts = {}) {
+    const showGlobal = !!opts.showGlobal;
+    const reloadAccounts = !!opts.reloadAccounts;
+    const url = API.getUrl();
+    if (!url) return;
+
+    const seq = ++this._statusSeq;
+    const loading = document.getElementById('statusLoading');
+    if (loading) loading.style.display = '';
+    if (showGlobal) UI.showGlobalLoading('Cargando status...');
+
     try {
-      await API.loadMonth(FT.invYear, FT.invMonth);
-      UI.renderInvestments();
-    } catch (e) {}
+      if (reloadAccounts || !FT.statusAccounts.length) {
+        await API.loadStatusAccounts();
+      }
+
+      const monthSeries = [];
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(FT.statusYear, FT.statusMonth - i, 1);
+        monthSeries.push({ y: d.getFullYear(), m: d.getMonth() });
+      }
+      const reqs = monthSeries.map(m => API.fetchStatusMonth(m.y, m.m));
+      const monthRows = await Promise.all(reqs);
+
+      const perMonthLatest = {};
+      monthSeries.forEach((m, idx) => {
+        perMonthLatest[`${m.y}-${m.m}`] = this._latestEntryByAccount(monthRows[idx]);
+      });
+      if (seq !== this._statusSeq) return;
+
+      const currentKey = `${FT.statusYear}-${FT.statusMonth}`;
+      const currentEntries = perMonthLatest[currentKey]
+        ? Object.values(perMonthLatest[currentKey])
+        : [];
+      FT.statusEntries = currentEntries;
+      const currentLatest = perMonthLatest[currentKey] || {};
+
+      const prevDate = new Date(FT.statusYear, FT.statusMonth - 1, 1);
+      const prevKey = `${prevDate.getFullYear()}-${prevDate.getMonth()}`;
+      const prevLatest = perMonthLatest[prevKey] || this._latestEntryByAccount(await API.fetchStatusMonth(prevDate.getFullYear(), prevDate.getMonth()));
+
+      const usedIds = {};
+      FT.statusAccounts.forEach(a => {
+        if (usedIds[a.id]) {
+          console.warn('Status account id duplicado:', a.id, a.name);
+        }
+        usedIds[a.id] = true;
+      });
+
+      const accountRows = FT.statusAccounts.map((a, idx) => ({
+        ...a,
+        _rowId: `${a.id}__${idx}`
+      }));
+
+      let total = 0;
+      let lastDate = '';
+      const rows = accountRows.map(a => {
+        const curr = currentLatest[a.id] || null;
+        const prev = prevLatest[a.id] || null;
+        const amount = curr ? parseAmount(curr.amount) : 0;
+        total += amount;
+        if (curr && curr.statusDate && (!lastDate || curr.statusDate > lastDate)) lastDate = curr.statusDate;
+
+        const hasPrev = !!prev;
+        const prevAmount = hasPrev ? parseAmount(prev.amount) : 0;
+        const delta = hasPrev ? (amount - prevAmount) : 0;
+        const pct = hasPrev && prevAmount !== 0 ? ((delta / Math.abs(prevAmount)) * 100) : null;
+        return {
+          id: a._rowId,
+          latestId: curr ? curr.id : '',
+          name: a.name,
+          icon: a.icon,
+          typeLabel: UI.statusTypeLabel(a.type),
+          amount,
+          delta,
+          deltaNA: !hasPrev,
+          deltaPct: pct === null ? 'N/A' : pct.toFixed(1),
+          trendHtml: this._buildTrend(a.id, monthSeries, perMonthLatest)
+        };
+      });
+
+      if (seq !== this._statusSeq) return;
+      UI.renderStatus({
+        total,
+        lastDate,
+        canCreate: this._isCurrentStatusMonth(),
+        rows
+      });
+    } catch (e) {
+      const list = document.getElementById('statusList');
+      if (list) list.innerHTML = `<div class="empty"><span class="msr">warning</span><p>${e.message || 'Error al cargar status.'}</p></div>`;
+    } finally {
+      if (loading) loading.style.display = 'none';
+      if (showGlobal) UI.hideGlobalLoading();
+    }
   },
 
   // ===== FILTERS =====
@@ -359,38 +520,42 @@ const App = {
   async saveEdit() {
     const id = document.getElementById('editId').value;
     const desc = document.getElementById('editDesc').value.trim();
-    const amount = parseFloat(document.getElementById('editAmount').value);
+    const amount = parseAmount(document.getElementById('editAmount').value);
     const date = document.getElementById('editDate').value;
 
     if (!amount) { UI.snack('Introduce un importe'); return; }
 
-    try {
-      await API.updateMovimiento(id, {
-        descripcion: desc,
-        importe: amount,
-        fecha: date,
-        categoria: UI._editCat,
-        subcategoria: UI._editSub,
-        modificado: nowISO()
-      });
-      UI.closeEditModal();
-      UI.renderList();
-      UI.updateSummary();
-      UI.renderInvestments();
-      UI.snack('Movimiento actualizado');
-    } catch (e) { UI.snack('Error al guardar'); }
+    await this._withLoading('Guardando cambios...', async () => {
+      try {
+        await API.updateMovimiento(id, {
+          descripcion: desc,
+          importe: amount,
+          fecha: date,
+          categoria: UI._editCat,
+          subcategoria: UI._editSub,
+          modificado: nowISO()
+        });
+        UI.closeEditModal();
+        UI.renderList();
+        UI.updateSummary();
+        UI.renderInvestments();
+        UI.snack('Movimiento actualizado');
+      } catch (e) { UI.snack('Error al guardar'); }
+    });
   },
 
   // ===== DELETE =====
   async deleteEntry(id) {
     if (!confirm('¿Eliminar este movimiento?')) return;
-    try {
-      await API.deleteMovimiento(id);
-      UI.renderList();
-      UI.updateSummary();
-      UI.renderInvestments();
-      UI.snack('Movimiento eliminado');
-    } catch (e) { UI.snack('Error al eliminar'); }
+    await this._withLoading('Eliminando movimiento...', async () => {
+      try {
+        await API.deleteMovimiento(id);
+        UI.renderList();
+        UI.updateSummary();
+        UI.renderInvestments();
+        UI.snack('Movimiento eliminado');
+      } catch (e) { UI.snack('Error al eliminar'); }
+    });
   },
 
   // ===== YTD BALANCE =====
@@ -401,51 +566,53 @@ const App = {
     document.getElementById('ytdLoading').style.display = '';
     document.getElementById('ytdExpCats').innerHTML = '';
     document.getElementById('ytdIncCats').innerHTML = '';
-    document.getElementById('ytdBalance').textContent = '€0';
-    document.getElementById('ytdInc').textContent = '€0';
-    document.getElementById('ytdExp').textContent = '€0';
+    document.getElementById('ytdBalance').textContent = '0,00€';
+    document.getElementById('ytdInc').textContent = '0,00€';
+    document.getElementById('ytdExp').textContent = '0,00€';
 
-    try {
-      // Load all months for the year
-      const allTx = [];
-      const url = API.getUrl();
-      if (!url) { UI.snack('Configura la URL primero'); return; }
+    await this._withLoading('Cargando balance YTD...', async () => {
+      try {
+        // Load all months for the year
+        const allTx = [];
+        const url = API.getUrl();
+        if (!url) { UI.snack('Configura la URL primero'); return; }
 
-      // Load each month Jan–current
-      const currentMonth = new Date().getFullYear() === year ? new Date().getMonth() : 11;
-      const promises = [];
-      for (let m = 0; m <= currentMonth; m++) {
-        promises.push(
-          fetch(`${url}?action=getMonth&year=${year}&month=${m + 1}`)
-            .then(r => r.json())
-            .then(rows => (rows || []).map(r => ({
-              type: r[2], category: r[4], subcategory: r[5] || '',
-              amount: parseFloat(r[7]) || 0, status: r[11] || 'activo'
-            })).filter(t => t.status === 'activo'))
-        );
+        // Load each month Jan–current
+        const currentMonth = new Date().getFullYear() === year ? new Date().getMonth() : 11;
+        const promises = [];
+        for (let m = 0; m <= currentMonth; m++) {
+          promises.push(
+            fetch(`${url}?action=getMonth&year=${year}&month=${m + 1}`)
+              .then(r => r.json())
+              .then(rows => (rows || []).map(r => ({
+                type: r[2], category: r[4], subcategory: r[5] || '',
+                amount: parseAmount(r[7]), status: String(r[11] || 'activo').toLowerCase().trim()
+              })).filter(t => t.status === 'activo'))
+          );
+        }
+        const results = await Promise.all(promises);
+        results.forEach(items => allTx.push(...items));
+
+        // Calculate totals
+        const incTx = allTx.filter(t => t.type === 'Ingreso');
+        const expTx = allTx.filter(t => t.type === 'Gasto');
+        const totalInc = incTx.reduce((s, t) => s + t.amount, 0);
+        const totalExp = expTx.reduce((s, t) => s + t.amount, 0);
+        const bal = totalInc - totalExp;
+
+        document.getElementById('ytdInc').textContent = formatEUR(totalInc);
+        document.getElementById('ytdExp').textContent = formatEUR(totalExp);
+        const bEl = document.getElementById('ytdBalance');
+        bEl.textContent = formatSignedEUR(bal);
+        bEl.className = 'bh-val num-lg ' + (bal > 0 ? 'positive' : bal < 0 ? 'negative' : '');
+
+        // Group by category
+        UI.renderYTDCategories(expTx, 'ytdExpCats', 'exp');
+        UI.renderYTDCategories(incTx, 'ytdIncCats', 'inc');
+      } catch (e) {
+        UI.snack('Error al cargar datos YTD');
       }
-      const results = await Promise.all(promises);
-      results.forEach(items => allTx.push(...items));
-
-      // Calculate totals
-      const incTx = allTx.filter(t => t.type === 'Ingreso');
-      const expTx = allTx.filter(t => t.type === 'Gasto');
-      const totalInc = incTx.reduce((s, t) => s + t.amount, 0);
-      const totalExp = expTx.reduce((s, t) => s + t.amount, 0);
-      const bal = totalInc - totalExp;
-
-      document.getElementById('ytdInc').textContent = '€' + totalInc.toFixed(2);
-      document.getElementById('ytdExp').textContent = '€' + totalExp.toFixed(2);
-      const bEl = document.getElementById('ytdBalance');
-      bEl.textContent = (bal >= 0 ? '+' : '−') + '€' + Math.abs(bal).toFixed(2);
-      bEl.className = 'bh-val num-lg ' + (bal > 0 ? 'positive' : bal < 0 ? 'negative' : '');
-
-      // Group by category
-      UI.renderYTDCategories(expTx, 'ytdExpCats', 'exp');
-      UI.renderYTDCategories(incTx, 'ytdIncCats', 'inc');
-    } catch (e) {
-      UI.snack('Error al cargar datos YTD');
-    }
+    });
     document.getElementById('ytdLoading').style.display = 'none';
   },
 
@@ -456,23 +623,27 @@ const App = {
   // ===== TEMPLATES =====
   async pauseTemplate(pid) {
     if (!confirm('¿Pausar esta recurrencia?')) return;
-    try {
-      await API.toggleTemplate(pid, false);
-      UI.renderList();
-      UI.renderTemplates();
-      UI.snack('Recurrencia pausada');
-    } catch (e) { UI.snack('Error'); }
+    await this._withLoading('Actualizando recurrencia...', async () => {
+      try {
+        await API.toggleTemplate(pid, false);
+        UI.renderList();
+        UI.renderTemplates();
+        UI.snack('Recurrencia pausada');
+      } catch (e) { UI.snack('Error'); }
+    });
   },
 
   async toggleTemplate(pid) {
     const t = FT.templates.find(x => x.id === pid);
     if (!t) return;
     const activate = t.status !== 'activo';
-    try {
-      await API.toggleTemplate(pid, activate);
-      UI.renderTemplates();
-      UI.snack(activate ? 'Recurrencia activada' : 'Recurrencia pausada');
-    } catch (e) { UI.snack('Error'); }
+    await this._withLoading('Actualizando recurrencia...', async () => {
+      try {
+        await API.toggleTemplate(pid, activate);
+        UI.renderTemplates();
+        UI.snack(activate ? 'Recurrencia activada' : 'Recurrencia pausada');
+      } catch (e) { UI.snack('Error'); }
+    });
   },
 
   // ===== EDIT TEMPLATE =====
@@ -506,31 +677,107 @@ const App = {
   async saveEditTemplate() {
     const pid = document.getElementById('editTplId').value;
     const desc = document.getElementById('editTplDesc').value.trim();
-    const amount = parseFloat(document.getElementById('editTplAmount').value);
+    const amount = parseAmount(document.getElementById('editTplAmount').value);
     const day = parseInt(document.getElementById('editTplDay').value) || 1;
 
     if (!amount) { UI.snack('Introduce un importe'); return; }
 
-    try {
-      await API.updateTemplate(pid, {
-        descripcion: desc,
-        importe: amount,
-        frecuencia: this._editTplFreq,
-        dia_cobro: day
-      });
-      this.closeEditTemplate();
-      UI.renderTemplates();
-      UI.snack('Recurrencia actualizada');
-    } catch (e) { UI.snack('Error al guardar'); }
+    await this._withLoading('Guardando recurrencia...', async () => {
+      try {
+        await API.updateTemplate(pid, {
+          descripcion: desc,
+          importe: amount,
+          frecuencia: this._editTplFreq,
+          dia_cobro: day
+        });
+        this.closeEditTemplate();
+        UI.renderTemplates();
+        UI.snack('Recurrencia actualizada');
+      } catch (e) { UI.snack('Error al guardar'); }
+    });
   },
 
   async deleteTemplate(pid) {
     if (!confirm('¿Eliminar esta recurrencia?')) return;
-    try {
-      await API.deleteTemplate(pid);
-      UI.renderTemplates();
-      UI.snack('Recurrencia eliminada');
-    } catch (e) { UI.snack('Error al eliminar'); }
+    await this._withLoading('Eliminando recurrencia...', async () => {
+      try {
+        await API.deleteTemplate(pid);
+        UI.renderTemplates();
+        UI.snack('Recurrencia eliminada');
+      } catch (e) { UI.snack('Error al eliminar'); }
+    });
+  },
+
+  // ===== STATUS =====
+  openStatusAdd() {
+    if (!this._isCurrentStatusMonth()) {
+      UI.snack('Solo puedes crear status en el mes actual');
+      return;
+    }
+    UI.renderStatusForm(FT.statusAccounts);
+    document.getElementById('statusAddDate').value = todayStr();
+    document.getElementById('statusAddModal').classList.add('show');
+  },
+
+  closeStatusAdd() {
+    document.getElementById('statusAddModal').classList.remove('show');
+  },
+
+  async saveStatusAdd() {
+    const date = document.getElementById('statusAddDate').value || todayStr();
+    const fields = Array.from(document.querySelectorAll('[data-status-account]'));
+    const items = fields.map(f => ({
+      accountId: f.dataset.statusAccount,
+      amount: parseAmount(f.value || 0)
+    }));
+
+    await this._withLoading('Guardando status...', async () => {
+      try {
+        await Promise.all(items.map(item => API.addStatusEntry({
+          status_id: genId('s'),
+          year: FT.statusYear,
+          month: FT.statusMonth + 1,
+          cuenta_id: item.accountId,
+          saldo: item.amount,
+          ha_stat: date,
+          estado: 'activo'
+        })));
+        this.closeStatusAdd();
+        await this.loadStatusData({ showGlobal: false });
+        UI.snack('Status guardado');
+      } catch (e) {
+        UI.snack('Error al guardar status');
+      }
+    });
+  },
+
+  openEditStatus(id) {
+    const e = FT.statusEntries.find(x => x.id === id);
+    if (!e) return;
+    document.getElementById('statusEditId').value = e.id;
+    document.getElementById('statusEditAmount').value = e.amount;
+    document.getElementById('statusEditDate').value = e.statusDate || todayStr();
+    document.getElementById('statusEditModal').classList.add('show');
+  },
+
+  closeEditStatus() {
+    document.getElementById('statusEditModal').classList.remove('show');
+  },
+
+  async saveEditStatus() {
+    const id = document.getElementById('statusEditId').value;
+    const amount = parseAmount(document.getElementById('statusEditAmount').value || 0);
+    const date = document.getElementById('statusEditDate').value || todayStr();
+    await this._withLoading('Actualizando status...', async () => {
+      try {
+        await API.updateStatusEntry(id, { saldo: amount, ha_stat: date });
+        this.closeEditStatus();
+        await this.loadStatusData({ showGlobal: false });
+        UI.snack('Status actualizado');
+      } catch (e) {
+        UI.snack('Error al actualizar status');
+      }
+    });
   }
 };
 

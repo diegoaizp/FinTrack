@@ -107,7 +107,6 @@
         <span class="field-label">Frecuencia</span>
         <div class="freq-row">
           <button class="freq-btn active" data-fq="mensual" onclick="App.setFreq('mensual')">Mensual</button>
-          <button class="freq-btn" data-fq="trimestral" onclick="App.setFreq('trimestral')">Trimestral</button>
           <button class="freq-btn" data-fq="semestral" onclick="App.setFreq('semestral')">Semestral</button>
           <button class="freq-btn" data-fq="anual" onclick="App.setFreq('anual')">Anual</button>
         </div>
@@ -127,11 +126,11 @@
     <div class="balance-hero" id="balanceHero">
       <div class="bh-main">
         <div class="bh-label">Balance del mes</div>
-        <div class="bh-val num-lg" id="sumBal">&#8364;0</div>
+        <div class="bh-val num-lg" id="sumBal">0,00€</div>
       </div>
       <div class="bh-row">
-        <div class="bh-item"><span class="msr" style="font-size:16px;color:var(--inc)">arrow_upward</span><span class="bh-amount num pos" id="sumInc">&#8364;0</span><span class="bh-tag">Ingresos</span></div>
-        <div class="bh-item"><span class="msr" style="font-size:16px;color:var(--exp)">arrow_downward</span><span class="bh-amount num neg" id="sumExp">&#8364;0</span><span class="bh-tag">Gastos</span></div>
+        <div class="bh-item"><span class="msr" style="font-size:16px;color:var(--inc)">arrow_upward</span><span class="bh-amount num pos" id="sumInc">0,00€</span><span class="bh-tag">Ingresos</span></div>
+        <div class="bh-item"><span class="msr" style="font-size:16px;color:var(--exp)">arrow_downward</span><span class="bh-amount num neg" id="sumExp">0,00€</span><span class="bh-tag">Gastos</span></div>
       </div>
     </div>
     <button class="ytd-btn" onclick="App.openYTD()"><span class="msr">bar_chart</span> Ver Balance YTD</button>
@@ -148,14 +147,32 @@
 
   <!-- ========== STATUS ========== -->
   <section class="section" id="sec-status">
-    <div class="empty"><span class="msr">bid_landscape</span><p>Status (pr&#243;ximamente)</p></div>
+    <div class="month-pill">
+      <button class="month-arrow" onclick="App.changeStatusMonth(-1)"><span class="msr">chevron_left</span></button>
+      <span class="month-text" id="statusMonthLabel">Febrero 2026</span>
+      <button class="month-arrow" onclick="App.changeStatusMonth(1)"><span class="msr">chevron_right</span></button>
+    </div>
+    <div class="balance-hero">
+      <div class="bh-main">
+        <div class="bh-label">Total status del mes</div>
+        <div class="bh-val num-lg" id="statusTotal">0,00€</div>
+      </div>
+      <div class="bh-row">
+        <div class="bh-item"><span class="bh-tag" id="statusLastDate">Último status: —</span></div>
+      </div>
+    </div>
+    <button class="ytd-btn" id="statusAddBtn" onclick="App.openStatusAdd()"><span class="msr">add</span> Crear nuevo informe</button>
+    <div class="tx-list" id="statusList">
+      <div class="empty"><span class="msr">bid_landscape</span><p>Sin status para este mes.</p></div>
+    </div>
+    <div class="ytd-loading" id="statusLoading" style="display:none"><span class="spinner"></span> Cargando status...</div>
   </section>
 
   <!-- ========== RECURRENTES ========== -->
   <section class="section" id="sec-subs">
     <div class="subs-hero">
       <div class="sh-label">Gasto mensual recurrente</div>
-      <div class="sh-val num-lg" id="subsTotal">&#8364;0,00</div>
+      <div class="sh-val num-lg" id="subsTotal">0,00€</div>
       <div class="sh-count" id="subsCount">0 activas</div>
     </div>
     <div class="subs-filter">
@@ -166,7 +183,6 @@
     <div class="subs-filter subs-cycle-filter" id="subsCycleFilter" style="display:none">
       <button class="fchip active" data-cf="all" onclick="App.setSubCycleFilter('all')">Todos los ciclos</button>
       <button class="fchip" data-cf="mensual" onclick="App.setSubCycleFilter('mensual')">Mensual</button>
-      <button class="fchip" data-cf="trimestral" onclick="App.setSubCycleFilter('trimestral')">Trimestral</button>
       <button class="fchip" data-cf="semestral" onclick="App.setSubCycleFilter('semestral')">Semestral</button>
       <button class="fchip" data-cf="anual" onclick="App.setSubCycleFilter('anual')">Anual</button>
     </div>
@@ -179,7 +195,7 @@
   <section class="section" id="sec-invest">
     <div class="inv-hero">
       <div class="ih-label">Total invertido este mes</div>
-      <div class="ih-val num-lg" id="invTotal">&#8364;0,00</div>
+      <div class="ih-val num-lg" id="invTotal">0,00€</div>
       <div class="ih-sub" id="invCount">0 aportaciones</div>
     </div>
     <div class="month-pill">
@@ -200,10 +216,10 @@
     </div>
     <div class="ytd-hero">
       <div class="bh-label">Balance acumulado del a&#241;o</div>
-      <div class="bh-val num-lg" id="ytdBalance">&#8364;0</div>
+      <div class="bh-val num-lg" id="ytdBalance">0,00€</div>
       <div class="ytd-row">
-        <div class="ytd-item inc"><span class="msr" style="font-size:16px">arrow_upward</span><span class="num" id="ytdInc">&#8364;0</span><span class="ytd-tag">Ingresos</span></div>
-        <div class="ytd-item exp"><span class="msr" style="font-size:16px">arrow_downward</span><span class="num" id="ytdExp">&#8364;0</span><span class="ytd-tag">Gastos</span></div>
+        <div class="ytd-item inc"><span class="msr" style="font-size:16px">arrow_upward</span><span class="num" id="ytdInc">0,00€</span><span class="ytd-tag">Ingresos</span></div>
+        <div class="ytd-item exp"><span class="msr" style="font-size:16px">arrow_downward</span><span class="num" id="ytdExp">0,00€</span><span class="ytd-tag">Gastos</span></div>
       </div>
     </div>
     <div class="ytd-section-title"><span class="msr" style="font-size:18px">arrow_downward</span> Gastos por categor&#237;a</div>
@@ -267,7 +283,6 @@
       <span class="field-label">Frecuencia</span>
       <div class="freq-row" id="editTplFreqRow">
         <button class="freq-btn" data-efq="mensual" onclick="App.setEditTplFreq('mensual')">Mensual</button>
-        <button class="freq-btn" data-efq="trimestral" onclick="App.setEditTplFreq('trimestral')">Trimestral</button>
         <button class="freq-btn" data-efq="semestral" onclick="App.setEditTplFreq('semestral')">Semestral</button>
         <button class="freq-btn" data-efq="anual" onclick="App.setEditTplFreq('anual')">Anual</button>
       </div>
@@ -281,12 +296,54 @@
   </div>
 </div>
 
+<!-- STATUS ADD MODAL -->
+<div class="modal-overlay" id="statusAddModal" onclick="if(event.target===this)App.closeStatusAdd()">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <span class="modal-title">Crear nuevo informe mensual</span>
+      <button class="icon-btn" onclick="App.closeStatusAdd()"><span class="msr">close</span></button>
+    </div>
+    <div class="field-group">
+      <span class="field-label">Fecha del status</span>
+      <input class="m3-input" type="date" id="statusAddDate">
+    </div>
+    <div id="statusFormRows"></div>
+    <button class="m3-btn" onclick="App.saveStatusAdd()"><span class="msr">check</span> Guardar informe</button>
+  </div>
+</div>
+
+<!-- STATUS EDIT MODAL -->
+<div class="modal-overlay" id="statusEditModal" onclick="if(event.target===this)App.closeEditStatus()">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <span class="modal-title">Editar status</span>
+      <button class="icon-btn" onclick="App.closeEditStatus()"><span class="msr">close</span></button>
+    </div>
+    <div class="field-group">
+      <span class="field-label">Importe</span>
+      <input class="m3-input" type="number" id="statusEditAmount" step="0.01" inputmode="decimal">
+    </div>
+    <div class="field-group">
+      <span class="field-label">Fecha del status</span>
+      <input class="m3-input" type="date" id="statusEditDate">
+    </div>
+    <input type="hidden" id="statusEditId">
+    <button class="m3-btn" onclick="App.saveEditStatus()"><span class="msr">check</span> Guardar cambios</button>
+  </div>
+</div>
+
 <!-- FLOATING REGISTER BUTTON -->
 <button class="floating-cta" id="floatingRegister" onclick="App.submitEntry()">
   <span class="msr">check</span> Registrar
 </button>
 
 <div class="snackbar" id="snackbar"></div>
+<div class="global-loader" id="globalLoader" aria-live="polite" aria-busy="true">
+  <div class="global-loader-card">
+    <span class="spinner"></span>
+    <span id="globalLoaderText">Cargando datos...</span>
+  </div>
+</div>
 
 <!-- JS Modules -->
 <script src="js/state.js"></script>

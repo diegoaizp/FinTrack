@@ -19,19 +19,25 @@ const FT = {
   year: new Date().getFullYear(),
   invMonth: new Date().getMonth(),
   invYear: new Date().getFullYear(),
+  statusMonth: new Date().getMonth(),
+  statusYear: new Date().getFullYear(),
 
   // Data
   tx: [],           // Current month movimientos
   templates: [],    // All plantillas
   categories: [],   // All categorias
+  statusAccounts: [],
+  statusEntries: [],
 
   // Edit state
   editingId: null,
 
   // Loading flags
   loading: false,
+  loadingCount: 0,
   catsLoaded: false,
   tplLoaded: false,
+  statusCache: {},
 };
 
 // ===== CACHE =====
@@ -96,6 +102,34 @@ function todayStr() {
 
 function nowISO() {
   return new Date().toISOString().slice(0, 19);
+}
+
+function parseAmount(v) {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  let s = String(v || '').trim();
+  if (!s) return 0;
+  s = s.replace(/\s/g, '');
+  if (s.includes(',')) {
+    s = s.replace(/\./g, '').replace(',', '.');
+  }
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function formatEUR(n) {
+  const value = Number.isFinite(Number(n)) ? Number(n) : 0;
+  const sign = value < 0 ? '-' : '';
+  const abs = Math.abs(value);
+  const fixed = abs.toFixed(2);
+  const parts = fixed.split('.');
+  const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `${sign}${intPart},${parts[1]}€`;
+}
+
+function formatSignedEUR(n) {
+  const value = Number.isFinite(Number(n)) ? Number(n) : 0;
+  if (value === 0) return '0,00€';
+  return `${value > 0 ? '+' : '−'}${formatEUR(Math.abs(value))}`;
 }
 
 function calcNextDate(dateStr, freq) {
