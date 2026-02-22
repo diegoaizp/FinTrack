@@ -44,20 +44,28 @@ const App = {
   // ===== DATA LOADING =====
   async loadAll() {
     UI.showSkeleton('txList');
-    await this._withLoading('Cargando datos...', async () => {
-      try {
-        await API.loadAll();
-        UI.renderCats();
-        UI.renderList();
-        UI.updateSummary();
-        UI.renderTemplates();
-        UI.renderInvestments();
-        await this.loadStatusData({ showGlobal: false, reloadAccounts: true }).catch(() => {});
-        UI.snack('Datos actualizados');
-      } catch (e) {
-        UI.showError('txList', 'Error al cargar datos.<br>Revisa la URL y el despliegue.');
-      }
-    });
+    UI.showGlobalLoading('Cargando categorías...');
+    try {
+      // Phase 1: unlock register form as soon as categories are ready.
+      await API.loadCategories();
+      UI.renderCats();
+      UI.hideGlobalLoading();
+
+      // Phase 2: load the rest in background.
+      await Promise.all([
+        API.loadMonth(FT.year, FT.month),
+        API.loadTemplates()
+      ]);
+      UI.renderList();
+      UI.updateSummary();
+      UI.renderTemplates();
+      UI.renderInvestments();
+      await this.loadStatusData({ showGlobal: false, reloadAccounts: true }).catch(() => {});
+      UI.snack('Datos actualizados');
+    } catch (e) {
+      UI.hideGlobalLoading();
+      UI.showError('txList', 'Error al cargar datos.<br>Revisa la URL y el despliegue.');
+    }
   },
 
   async loadCurrentMonth() {
