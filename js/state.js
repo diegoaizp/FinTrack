@@ -47,8 +47,8 @@ const Cache = {
       const raw = localStorage.getItem(this.key(year, month));
       if (!raw) return null;
       const data = JSON.parse(raw);
-      // Check staleness (15 min)
-      if (Date.now() - (data._ts || 0) > 15 * 60 * 1000) return null;
+      // Check staleness (3 min)
+      if (Date.now() - (data._ts || 0) > 3 * 60 * 1000) return null;
       return data.items;
     } catch (e) { return null; }
   },
@@ -69,6 +69,16 @@ const Cache = {
   invalidateCurrent() {
     this.invalidate(FT.year, FT.month);
     this.invalidate(FT.invYear, FT.invMonth);
+  },
+
+  clearAll() {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      // Only remove month-cache keys (ft_YYYY_MM), keep ft_url and other app settings.
+      if (k && /^ft_\d{4}_\d{2}$/.test(k)) keys.push(k);
+    }
+    keys.forEach(k => localStorage.removeItem(k));
   }
 };
 

@@ -31,7 +31,9 @@ const UI = {
   },
 
   updateInvMonthLabel() {
-    document.getElementById('invMonthLabel').textContent = MONTHS[FT.invMonth] + ' ' + FT.invYear;
+    const el = document.getElementById('invMonthLabel');
+    if (!el) return;
+    el.textContent = MONTHS[FT.invMonth] + ' ' + FT.invYear;
   },
 
   // ===== CATEGORIES =====
@@ -251,16 +253,19 @@ const UI = {
 
   // ===== INVESTMENTS =====
   renderInvestments() {
+    const totalEl = document.getElementById('invTotal');
+    const countEl = document.getElementById('invCount');
+    const list = document.getElementById('invList');
+    if (!totalEl || !countEl || !list) return;
+
     const items = FT.tx.filter(tx => {
       const d = new Date(tx.date);
       return tx.type === 'Inversión' && d.getMonth() === FT.invMonth && d.getFullYear() === FT.invYear;
     }).sort((a, b) => new Date(b.date) - new Date(a.date));
 
     const total = items.reduce((s, t) => s + t.amount, 0);
-    document.getElementById('invTotal').textContent = '€' + total.toFixed(2);
-    document.getElementById('invCount').textContent = items.length + ' aportacion' + (items.length !== 1 ? 'es' : '');
-
-    const list = document.getElementById('invList');
+    totalEl.textContent = '€' + total.toFixed(2);
+    countEl.textContent = items.length + ' aportacion' + (items.length !== 1 ? 'es' : '');
     if (!items.length) {
       list.innerHTML = `<div class="empty"><span class="msr">account_balance_wallet</span><p>Sin inversiones en ${MONTHS[FT.invMonth]} ${FT.invYear}</p></div>`;
       return;

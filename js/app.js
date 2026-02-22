@@ -77,12 +77,14 @@ const App = {
       n.classList.toggle('active', n.dataset.t === t)
     );
     ['form', 'history', 'status', 'subs', 'invest', 'ytd'].forEach(s =>
-      document.getElementById('sec-' + s).classList.toggle('show', s === t)
+      document.getElementById('sec-' + s)?.classList.toggle('show', s === t)
     );
     // Show/hide floating register button
-    document.getElementById('floatingRegister').style.display = t === 'form' ? 'flex' : 'none';
+    const registerBtn = document.getElementById('floatingRegister');
+    if (registerBtn) registerBtn.style.display = t === 'form' ? 'flex' : 'none';
     // Show/hide bottom nav (hide on YTD page)
-    document.querySelector('.bottom-nav').style.display = t === 'ytd' ? 'none' : '';
+    const bnav = document.querySelector('.bottom-nav');
+    if (bnav) bnav.style.display = t === 'ytd' ? 'none' : '';
 
     if (t === 'form') setTimeout(() => document.getElementById('inputAmount').focus(), 150);
     if (t === 'subs') UI.renderTemplates();
@@ -131,7 +133,7 @@ const App = {
 
   setFreq(f) {
     FT.freq = f;
-    document.querySelectorAll('.freq-btn').forEach(b =>
+    document.querySelectorAll('.freq-btn[data-fq]').forEach(b =>
       b.classList.toggle('active', b.dataset.fq === f)
     );
   },

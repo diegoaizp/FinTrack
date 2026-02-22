@@ -1,6 +1,12 @@
 // ===== FinTrack API Module =====
 
 const API = {
+  _expectArray(rows, label) {
+    if (Array.isArray(rows)) return rows;
+    const msg = rows && rows.error ? rows.error : `Respuesta inválida en ${label}`;
+    throw new Error(msg);
+  },
+
   getUrl() {
     return localStorage.getItem('ft_url') || '';
   },
@@ -23,7 +29,8 @@ const API = {
     }
 
     const res = await fetch(`${url}?action=getMonth&year=${year}&month=${month + 1}`);
-    const rows = await res.json();
+    const raw = await res.json();
+    const rows = this._expectArray(raw, 'getMonth');
 
     const items = (rows || []).map(r => ({
       id: r[0], date: r[1], type: r[2], scope: r[3],
@@ -42,7 +49,8 @@ const API = {
     const url = this.getUrl();
     if (!url) return null;
     const res = await fetch(`${url}?action=getTemplates`);
-    const rows = await res.json();
+    const raw = await res.json();
+    const rows = this._expectArray(raw, 'getTemplates');
 
     FT.templates = (rows || []).map(r => ({
       id: r[0], type: r[1], scope: r[2], category: r[3],
@@ -60,7 +68,8 @@ const API = {
     const url = this.getUrl();
     if (!url) return null;
     const res = await fetch(`${url}?action=getCategories`);
-    const rows = await res.json();
+    const raw = await res.json();
+    const rows = this._expectArray(raw, 'getCategories');
 
     FT.categories = (rows || []).map(r => ({
       tipo: r[0], categoria: r[1], subcategoria: r[2],
@@ -71,10 +80,13 @@ const API = {
     return FT.categories;
   },
 
-  // Load everything needed on startup
+  // Load everything needed on startup (always fresh, bypass cache)
   async loadAll() {
     const url = this.getUrl();
     if (!url) throw new Error('No URL');
+
+    // Clear ALL cache to force fresh data from server
+    Cache.clearAll();
 
     // Parallel load
     const [monthData, templates, categories] = await Promise.all([
