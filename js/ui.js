@@ -472,12 +472,16 @@ const UI = {
 
   renderStatus(vm) {
     const totalEl = document.getElementById('statusTotal');
+    const liqEl = document.getElementById('statusLiquidity');
+    const invEl = document.getElementById('statusInvestment');
     const dateEl = document.getElementById('statusLastDate');
     const listEl = document.getElementById('statusList');
     const addBtn = document.getElementById('statusAddBtn');
     if (!totalEl || !dateEl || !listEl || !addBtn) return;
 
     totalEl.textContent = formatEUR(vm.total);
+    if (liqEl) liqEl.textContent = formatEUR(vm.liquidityTotal || 0);
+    if (invEl) invEl.textContent = formatEUR(vm.investmentTotal || 0);
     dateEl.textContent = vm.lastDate ? `Último status: ${vm.lastDate}` : 'Último status: —';
     addBtn.disabled = !vm.canCreate;
 

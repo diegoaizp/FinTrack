@@ -569,12 +569,17 @@ const App = {
       }));
 
       let total = 0;
+      let liquidityTotal = 0;
+      let investmentTotal = 0;
       let lastDate = '';
       const rows = accountRows.map(a => {
         const curr = currentLatest[a.id] || null;
         const prev = prevLatest[a.id] || null;
         const amount = curr ? parseAmount(curr.amount) : 0;
         total += amount;
+        const accType = normText(a.type);
+        if (accType === 'liquidez') liquidityTotal += amount;
+        if (accType === 'inversion') investmentTotal += amount;
         if (curr && curr.statusDate && (!lastDate || curr.statusDate > lastDate)) lastDate = curr.statusDate;
 
         const hasPrev = !!prev;
@@ -598,6 +603,8 @@ const App = {
       if (seq !== this._statusSeq) return;
       UI.renderStatus({
         total,
+        liquidityTotal,
+        investmentTotal,
         lastDate,
         canCreate: this._isCurrentStatusMonth(),
         rows
