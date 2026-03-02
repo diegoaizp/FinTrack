@@ -317,6 +317,7 @@ const API = {
     if (fields.subcategoria !== undefined) update.subcategoria = fields.subcategoria;
     if (fields.frecuencia   !== undefined) update.frecuencia   = fields.frecuencia;
     if (fields.dia_cobro    !== undefined) update.dia_cobro    = fields.dia_cobro;
+    if (fields.proxima      !== undefined) update.proxima      = fields.proxima;
 
     const { error } = await _initSb()
       .from('plantillas').update(update).eq('plantilla_id', pid);
@@ -329,6 +330,7 @@ const API = {
       if (fields.categoria    !== undefined) t.category    = fields.categoria;
       if (fields.subcategoria !== undefined) t.subcategory = fields.subcategoria;
       if (fields.frecuencia   !== undefined) t.frequency   = fields.frecuencia;
+      if (fields.proxima      !== undefined) t.next        = fields.proxima;
       if (fields.dia_cobro    !== undefined) t.dayOfCharge = fields.dia_cobro;
     }
   },

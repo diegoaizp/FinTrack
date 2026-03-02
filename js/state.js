@@ -11,7 +11,7 @@ const FT = {
 
   // Filters
   filter: 'all',
-  subFilter: 'all',
+  subFilter: 'suscripcion',
   subCycleFilter: 'all',
 
   // Month navigation
@@ -211,6 +211,12 @@ function isCompensatingBizum(tx) {
     normText(tx.category) === 'reembolsos' &&
     normText(tx.subcategory) === 'bizum' &&
     !!String(tx.templateId || '').trim();
+}
+
+// Excluye TODA la categoría Reembolsos de los totales de ingresos
+function isReembolso(tx) {
+  if (!tx) return false;
+  return tx.type === 'Ingreso' && normText(tx.category || '') === 'reembolsos';
 }
 
 // Monthly cost normalization for templates

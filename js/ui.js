@@ -149,7 +149,7 @@ const UI = {
       const dayNum = d.getDate();
       const wday = WEEKDAYS[d.getDay()];
       const dayTotal = txs.reduce((s, t) => {
-        if (isCompensatingBizum(t)) return s;
+        if (isReembolso(t)) return s;
         return s + (t.type === 'Gasto' ? -t.amount : t.amount);
       }, 0);
       const sign = dayTotal >= 0 ? '+' : '−';
@@ -212,14 +212,17 @@ const UI = {
 
   // ===== SUMMARY (balance hero) =====
   updateSummary() {
-    const mt = FT.tx.filter(tx => {
+    const allMonth = FT.tx.filter(tx => {
       const d = new Date(tx.date);
-      return d.getMonth() === FT.month && d.getFullYear() === FT.year && tx.type !== 'Inversión';
+      return d.getMonth() === FT.month && d.getFullYear() === FT.year;
     });
+    const mt = allMonth.filter(tx => tx.type !== 'Inversión');
 
-    const inc = mt.filter(t => t.type === 'Ingreso' && !isCompensatingBizum(t)).reduce((s, t) => s + t.amount, 0);
+    const inc = mt.filter(t => t.type === 'Ingreso' && !isReembolso(t)).reduce((s, t) => s + t.amount, 0);
     const exp = mt.filter(t => t.type === 'Gasto').reduce((s, t) => s + t.amount, 0);
-    const bal = inc - exp;
+    const inv = allMonth.filter(t => t.type === 'Inversión').reduce((s, t) => s + t.amount, 0);
+    // Balance = Ingresos − Gastos − Invertido
+    const bal = inc - exp - inv;
 
     document.getElementById('sumInc').textContent = formatEUR(inc);
     document.getElementById('sumExp').textContent = formatEUR(exp);
@@ -227,6 +230,12 @@ const UI = {
     const bEl = document.getElementById('sumBal');
     bEl.textContent = formatSignedEUR(bal);
     bEl.className = 'bh-val num-lg ' + (bal > 0 ? 'positive' : bal < 0 ? 'negative' : '');
+
+    // Item "Invertido" en la misma fila (visible solo si hay inversiones ese mes)
+    const invItem = document.getElementById('sumInvItem');
+    if (invItem) invItem.style.display = inv > 0 ? '' : 'none';
+    const invEl = document.getElementById('sumInv');
+    if (invEl) invEl.textContent = formatEUR(inv);
   },
 
   // ===== TEMPLATES / RECURRENTES =====
@@ -236,8 +245,10 @@ const UI = {
     if (FT.subFilter !== 'all') items = items.filter(t => t.recurrence === FT.subFilter);
     if (FT.subCycleFilter !== 'all') items = items.filter(t => t.frequency === FT.subCycleFilter);
 
-    const active = items.filter(s => s.status === 'activo');
-    const paused = items.filter(s => s.status !== 'activo');
+    const freqOrder = { mensual: 0, trimestral: 1, semestral: 2, anual: 3 };
+    const byFreq = (a, b) => (freqOrder[a.frequency] ?? 99) - (freqOrder[b.frequency] ?? 99);
+    const active = items.filter(s => s.status === 'activo').sort(byFreq);
+    const paused = items.filter(s => s.status !== 'activo').sort(byFreq);
 
     const monthlyTotal = active.reduce((s, x) => s + monthlyAmount(x), 0);
 
@@ -273,16 +284,31 @@ const UI = {
       }
       const nextHtml = nextStr ? `<div class="sc-next"><span class="msr">schedule</span>${nextStr}</div>` : '';
 
+      // ¿Ya cobrado este mes? Buscar en FT.tx un movimiento vinculado a esta plantilla en el mes actual
+      const paid = FT.tx.some(t => {
+        if (t.templateId !== s.id) return false;
+        const d = new Date(t.date);
+        return d.getMonth() === FT.month && d.getFullYear() === FT.year;
+      });
+      const paidBadge = paid
+        ? `<div class="paid-badge"><span class="msr">check_circle</span>Cobrado</div>`
+        : '';
+      const cobroBtn = isActive
+        ? `<button class="sc-cobro-btn" ${paid ? 'disabled title="Ya cobrado este mes"' : 'title="Registrar cobro"'} onclick="App.openCobro('${s.id}')"><span class="msr">add</span></button>`
+        : '';
+
       return `<div class="sub-card ${isActive ? '' : 'off'}">
         <div class="sc-icon"><span class="msr filled">${ic}</span></div>
         <div class="sc-info">
           <div class="sc-name">${desc}<span class="sc-freq">${fLabel}</span></div>
           <div class="sc-detail">${s.category}${sub}</div>
           ${nextHtml}
+          ${paidBadge}
         </div>
         <div class="sc-right">
           <span class="sc-price num">${formatEUR(s.amount)}</span>
           <div class="sc-actions">
+            ${cobroBtn}
             <button class="tx-act" onclick="App.openEditTemplate('${s.id}')" title="Editar"><span class="msr">edit</span></button>
             <button class="tx-act" onclick="App.deleteTemplate('${s.id}')" title="Eliminar"><span class="msr">delete</span></button>
             <label class="m3-sw"><input type="checkbox" ${isActive ? 'checked' : ''} onchange="App.toggleTemplate('${s.id}')"><span class="track"></span></label>
@@ -292,6 +318,42 @@ const UI = {
     }).join('');
 
     list.innerHTML = render(active) + render(paused);
+  },
+
+  // Historial de pagos de una plantilla (últimos 6 meses cacheados + mes actual)
+  renderTemplateHistory(pid) {
+    const listEl = document.getElementById('tplHistoryList');
+    if (!listEl) return;
+
+    const allPaid = [];
+
+    // Mes actual en FT.tx
+    FT.tx.filter(t => t.templateId === pid).forEach(t => allPaid.push(t));
+
+    // 5 meses anteriores desde la caché
+    const now = new Date();
+    for (let i = 1; i <= 5; i++) {
+      let m = now.getMonth() - i;
+      let y = now.getFullYear();
+      if (m < 0) { m += 12; y--; }
+      const cached = Cache.get(y, m);
+      if (cached) cached.filter(t => t.templateId === pid).forEach(t => allPaid.push(t));
+    }
+
+    if (!allPaid.length) {
+      listEl.innerHTML = '<div style="font-size:.82rem;color:var(--md-on-surface-var);padding:6px 0">Sin pagos registrados aún</div>';
+      return;
+    }
+
+    allPaid.sort((a, b) => b.date.localeCompare(a.date));
+    listEl.innerHTML = allPaid.map(t => {
+      const d = new Date(t.date + 'T12:00:00');
+      const label = MONTHS[d.getMonth()] + ' ' + d.getFullYear();
+      return `<div class="tpl-hist-row">
+        <span class="tpl-hist-month">${label}</span>
+        <span class="tpl-hist-amount num">${formatEUR(t.amount)}</span>
+      </div>`;
+    }).join('');
   },
 
   // ===== INVESTMENTS =====
@@ -332,33 +394,44 @@ const UI = {
         </div>
       </div>`;
     }).join('');
+
+    this._renderInvBars();
   },
 
   _renderInvBars() {
     const bars = document.getElementById('invBars');
     if (!bars) return;
 
-    // Collect last 6 months totals from loaded data
+    // Usa la caché de cada mes — el mes actual siempre está; los anteriores
+    // se van rellenando conforme el usuario navega o la TTL los carga.
     const months = [];
     for (let i = 5; i >= 0; i--) {
       let m = FT.invMonth - i;
       let y = FT.invYear;
       if (m < 0) { m += 12; y--; }
-      const total = FT.tx
-        .filter(tx => {
-          if (tx.type !== 'Inversión') return false;
-          const d = new Date(tx.date);
-          return d.getMonth() === m && d.getFullYear() === y;
-        })
+
+      const isCurrent = (m === FT.invMonth && y === FT.invYear);
+      // Mes actual: usar FT.tx directamente (siempre fresco)
+      // Meses pasados: leer de caché (puede ser null si no se ha cargado aún)
+      let items;
+      if (isCurrent) {
+        items = FT.tx;
+      } else {
+        items = Cache.get(y, m) || [];
+      }
+
+      const total = items
+        .filter(tx => tx.type === 'Inversión')
         .reduce((s, t) => s + t.amount, 0);
-      months.push({ m, y, total, current: m === FT.invMonth && y === FT.invYear });
+      months.push({ m, y, total, current: isCurrent });
     }
 
     const max = Math.max(...months.map(x => x.total), 1);
 
     bars.innerHTML = months.map(x => {
       const h = Math.max((x.total / max) * 60, 2);
-      return `<div class="inv-bar-col">
+      const title = `${MONTHS_SHORT[x.m]} ${x.y}: ${formatEUR(x.total)}`;
+      return `<div class="inv-bar-col" title="${title}">
         <div class="inv-bar${x.current ? ' current' : ''}" style="height:${h}px"></div>
         <span class="inv-bar-label">${MONTHS_SHORT[x.m]}</span>
       </div>`;
@@ -460,9 +533,56 @@ const UI = {
   },
 
   // ===== SKELETON =====
+
+  // Genera una tarjeta skeleton realista (imita una tx-card)
+  _skCard() {
+    return `<div class="sk-card">
+      <div class="sk-ava shimmer"></div>
+      <div class="sk-body">
+        <div class="sk-line shimmer"></div>
+        <div class="sk-line short shimmer"></div>
+      </div>
+      <div class="sk-amount shimmer"></div>
+    </div>`;
+  },
+
+  // Skeleton para #txList: agrupa por día con placeholders realistas
   showSkeleton(containerId) {
-    document.getElementById(containerId).innerHTML =
-      '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
+    const card = this._skCard();
+    const block = `<div class="sk-day shimmer"></div>${card}${card}${card}`;
+    document.getElementById(containerId).innerHTML = block + block;
+  },
+
+  // Skeleton del balance hero (mientras cargan los números)
+  showHeroSkeleton() {
+    document.getElementById('balanceHero')?.classList.add('sk-loading', 'shimmer-group');
+  },
+
+  hideHeroSkeleton() {
+    document.getElementById('balanceHero')?.classList.remove('sk-loading', 'shimmer-group');
+  },
+
+  // Skeleton de la sección de status (tarjetas de cuentas)
+  showStatusSkeleton() {
+    const skCard = `<div class="sk-status-card">
+      <div class="sk-status-icon shimmer"></div>
+      <div class="sk-body">
+        <div class="sk-line shimmer" style="width:50%"></div>
+        <div class="sk-line short shimmer" style="width:30%"></div>
+      </div>
+      <div class="sk-status-val shimmer"></div>
+    </div>`;
+    const list = document.getElementById('statusList');
+    if (list) list.innerHTML = skCard + skCard + skCard;
+  },
+
+  // Skeleton del hero de inversiones
+  showInvHeroSkeleton() {
+    document.getElementById('invTotal')?.closest('.inv-hero')?.classList.add('sk-loading');
+  },
+
+  hideInvHeroSkeleton() {
+    document.getElementById('invTotal')?.closest('.inv-hero')?.classList.remove('sk-loading');
   },
 
   showError(containerId, msg) {

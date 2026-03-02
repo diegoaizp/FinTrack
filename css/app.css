@@ -206,6 +206,12 @@ body.app-loading .app-shell{filter:blur(4px);pointer-events:none;user-select:non
 .inv-hero .ih-label{font-size:.72rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--md-on-surface);font-weight:500;margin-bottom:8px}
 .inv-hero .ih-val{color:var(--md-on-surface)}
 .inv-hero .ih-sub{font-size:.82rem;color:var(--md-on-surface);opacity:.7;margin-top:6px}
+.inv-bars-wrap{margin-bottom:16px;padding:12px 4px 0}
+.inv-bars{display:flex;align-items:flex-end;justify-content:space-between;gap:4px;height:72px}
+.inv-bar-col{display:flex;flex-direction:column;align-items:center;flex:1;gap:4px}
+.inv-bar{width:100%;background:var(--inv-c);opacity:.35;border-radius:4px 4px 0 0;transition:height .3s ease,opacity .2s}
+.inv-bar.current{opacity:1;background:var(--inv)}
+.inv-bar-label{font-size:.65rem;color:var(--md-on-surface-var);letter-spacing:.3px}
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;align-items:flex-end;justify-content:center}
 .modal-overlay.show{display:flex}
 .modal-sheet{background:var(--md-surface-c);border-radius:var(--r-xl) var(--r-xl) 0 0;padding:24px 20px 40px;width:100%;max-width:600px;max-height:85vh;overflow-y:auto;animation:sheetUp .35s cubic-bezier(.2,0,0,1)}
@@ -224,8 +230,48 @@ body.app-loading .app-shell{filter:blur(4px);pointer-events:none;user-select:non
 .snackbar.show{opacity:1;pointer-events:auto}
 .spinner{display:inline-block;width:18px;height:18px;border:2.5px solid transparent;border-top-color:currentColor;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px}
 @keyframes spin{to{transform:rotate(360deg)}}
-.skeleton{background:linear-gradient(90deg,var(--md-surface-cl) 25%,var(--md-surface-c) 50%,var(--md-surface-cl) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:var(--r-lg);height:68px;margin-bottom:8px}
+/* ── Shimmer base ─────────────────────────────────────────────── */
 @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+.shimmer{background:linear-gradient(90deg,var(--md-surface-cl) 25%,var(--md-surface-c) 50%,var(--md-surface-cl) 75%);background-size:200% 100%;animation:shimmer 1.4s ease-in-out infinite;border-radius:6px}
+
+/* ── Legacy skeleton (kept por compatibilidad) ───────────────── */
+.skeleton{height:68px;margin-bottom:8px;border-radius:var(--r-lg)}
+.skeleton{background:linear-gradient(90deg,var(--md-surface-cl) 25%,var(--md-surface-c) 50%,var(--md-surface-cl) 75%);background-size:200% 100%;animation:shimmer 1.4s ease-in-out infinite}
+
+/* ── Skeleton: transaction card ─────────────────────────────── */
+.sk-card{display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid var(--md-outline-var)}
+.sk-card:last-child{border-bottom:none}
+.sk-ava{width:40px;height:40px;border-radius:50%;flex-shrink:0}
+.sk-body{flex:1;display:flex;flex-direction:column;gap:7px}
+.sk-line{height:13px}
+.sk-line.short{width:42%}
+.sk-amount{width:58px;height:15px;flex-shrink:0}
+
+/* ── Skeleton: day label ────────────────────────────────────── */
+.sk-day{height:11px;width:80px;margin:16px 0 10px;border-radius:4px}
+
+/* ── Skeleton: balance hero ─────────────────────────────────── */
+.balance-hero.sk-loading .bh-val{min-width:140px;height:36px;border-radius:8px;display:inline-block;vertical-align:middle}
+.balance-hero.sk-loading .bh-amount{min-width:72px;height:16px;border-radius:5px;display:inline-block;vertical-align:middle}
+.balance-hero.sk-loading .bh-tag{display:none}
+.balance-hero.sk-loading .bh-val,
+.balance-hero.sk-loading .bh-amount{background:linear-gradient(90deg,var(--md-surface-c) 25%,var(--md-surface-ch) 50%,var(--md-surface-c) 75%);background-size:200% 100%;animation:shimmer 1.4s ease-in-out infinite;color:transparent}
+
+/* ── Skeleton: status account card ─────────────────────────── */
+.sk-status-card{display:flex;align-items:center;gap:14px;padding:14px;background:var(--md-surface-cl);border-radius:var(--r-lg);margin-bottom:8px}
+.sk-status-icon{width:36px;height:36px;border-radius:50%;flex-shrink:0}
+.sk-status-body{flex:1;display:flex;flex-direction:column;gap:7px}
+.sk-status-val{width:90px;height:18px;border-radius:5px;align-self:flex-end}
+
+/* ── Skeleton: investments hero ─────────────────────────────── */
+.inv-hero.sk-loading .ih-val{min-width:130px;height:32px;border-radius:7px;display:inline-block;vertical-align:middle;background:linear-gradient(90deg,rgba(255,255,255,.08) 25%,rgba(255,255,255,.16) 50%,rgba(255,255,255,.08) 75%);background-size:200% 100%;animation:shimmer 1.4s ease-in-out infinite;color:transparent}
+.inv-hero.sk-loading .ih-sub{opacity:0}
+
+/* ── Barra de progreso top (para writes) ────────────────────── */
+.top-progress{position:fixed;top:0;left:0;width:100%;height:3px;z-index:2000;background:transparent;pointer-events:none}
+.top-progress-bar{height:100%;width:0%;background:var(--clr-primary,#a78bfa);border-radius:0 2px 2px 0;transition:width .2s ease;box-shadow:0 0 8px var(--clr-primary,#a78bfa)}
+.top-progress.running .top-progress-bar{animation:progress-indeterminate 1.2s ease-in-out infinite}
+@keyframes progress-indeterminate{0%{width:0%;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0%;margin-left:100%}}
 .field-group{margin-bottom:16px}
 .subs-filter{display:flex;gap:8px;margin-bottom:16px}
 
@@ -235,10 +281,13 @@ body.app-loading .app-shell{filter:blur(4px);pointer-events:none;user-select:non
 .bh-label{font-size:.7rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--md-on-surface-var);font-weight:500;margin-bottom:6px}
 .bh-val{font-size:2.4rem}
 .bh-val.positive{color:var(--inc)}.bh-val.negative{color:var(--exp)}
-.bh-row{display:flex;justify-content:center;gap:32px}
+.bh-row{display:flex;justify-content:center;gap:32px;flex-wrap:wrap}
 .bh-item{display:flex;align-items:center;gap:6px}
 .bh-amount{font-size:.95rem}
+.bh-amount.inv{color:#8BBFE8}
 .bh-tag{font-size:.68rem;color:var(--md-on-surface-var);letter-spacing:.3px}
+/* YTD investment row */
+.ytd-item.inv .num{color:#8BBFE8}
 
 /* DAY GROUP HEADERS */
 .day-header{display:flex;align-items:center;justify-content:space-between;padding:12px 4px 6px;margin-top:8px}
@@ -260,6 +309,26 @@ body.app-loading .app-shell{filter:blur(4px);pointer-events:none;user-select:non
 .sub-card .sc-freq{display:inline-flex;padding:2px 8px;border-radius:var(--r-xs);background:var(--md-surface-chst);color:var(--md-on-surface-var);font-size:.6rem;font-weight:600;letter-spacing:.3px;text-transform:uppercase;margin-left:8px}
 .sub-card .sc-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0}
 .sc-actions{display:flex;align-items:center;gap:2px}
+/* Badge "Ya cobrado" */
+.paid-badge{display:inline-flex;align-items:center;gap:3px;font-size:.63rem;color:var(--inc);background:var(--inc-c);border-radius:20px;padding:2px 7px;font-weight:500;margin-top:3px}
+.paid-badge .msr{font-size:13px}
+/* Botón registrar cobro */
+.sc-cobro-btn{background:var(--md-primary);color:var(--md-on-primary);border:none;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:opacity .2s}
+.sc-cobro-btn:disabled{opacity:.35;cursor:default;background:var(--md-surface-ch)}
+.sc-cobro-btn .msr{font-size:18px}
+/* Cobro modal */
+.cobro-info{display:flex;align-items:center;gap:12px;background:var(--md-surface-c);border-radius:var(--r-md);padding:12px 14px;margin-bottom:16px}
+.cobro-info .ci-icon{width:38px;height:38px;border-radius:50%;background:var(--md-primary-c);color:var(--md-on-primary-c);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.cobro-info .ci-icon .msr{font-size:20px;font-variation-settings:'FILL' 1}
+.cobro-info .ci-name{font-size:.92rem;font-weight:500}
+.cobro-info .ci-detail{font-size:.73rem;color:var(--md-on-surface-var);margin-top:2px}
+/* Historial de pagos en el modal de edición */
+.tpl-history{margin-top:20px;padding-top:16px;border-top:1px solid var(--md-outline-var)}
+.tpl-history .field-label{display:block;margin-bottom:8px}
+.tpl-hist-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--md-surface-ch);font-size:.84rem}
+.tpl-hist-row:last-child{border-bottom:none}
+.tpl-hist-month{color:var(--md-on-surface-var)}
+.tpl-hist-amount{font-weight:500;color:var(--exp)}
 .subs-cycle-filter{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;margin-top:-8px}
 .subs-cycle-filter::-webkit-scrollbar{display:none}
 .subs-cycle-filter .fchip{font-size:.72rem;padding:6px 12px;height:30px}
@@ -300,10 +369,13 @@ body.app-loading .app-shell{filter:blur(4px);pointer-events:none;user-select:non
 .status-bar.up{background:var(--inc)}
 .status-bar.down{background:var(--exp)}
 .ytd-loading{text-align:center;padding:32px;color:var(--md-on-surface-var);font-size:.88rem}
-.global-loader{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:1000;background:rgba(0,0,0,.35)}
+/* Global loader — solo para operaciones de escritura (guardar/borrar) */
+.global-loader{position:fixed;inset:0;display:none;align-items:flex-end;justify-content:center;z-index:1000;padding-bottom:100px;pointer-events:none}
 .global-loader.show{display:flex}
-.global-loader-card{display:flex;align-items:center;gap:10px;background:var(--md-surface-cl);border:1px solid var(--md-outline-var);border-radius:var(--r-lg);padding:14px 16px;box-shadow:var(--elev-3);color:var(--md-on-surface)}
+.global-loader-card{display:flex;align-items:center;gap:10px;background:var(--md-surface-cl);border:1px solid var(--md-outline-var);border-radius:var(--r-lg);padding:12px 18px;box-shadow:var(--elev-3);color:var(--md-on-surface);font-size:.88rem;pointer-events:auto}
 .global-loader .spinner{margin-right:0}
+/* Eliminamos el blur — con skeletons ya no necesitamos cegar la UI */
+body.app-loading .app-shell{filter:none;pointer-events:auto;user-select:auto}
 
 @media(min-width:840px){
   .section{max-width:560px}

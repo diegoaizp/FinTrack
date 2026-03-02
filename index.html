@@ -29,7 +29,7 @@
   <!-- CONFIG -->
   <div class="config-sheet" id="configSheet">
     <span class="field-label">Clave de acceso</span>
-    <input class="m3-input" type="password" id="scriptUrl" placeholder="Pega tu clave de Supabase (anon key)">
+    <input class="m3-input" type="password" id="scriptUrl" placeholder="Pega tu clave de Supabase (anon key)" autocomplete="new-password">
     <div class="config-hint">Pega la anon key de tu proyecto Supabase. Se guarda sólo en este navegador.</div>
     <button class="m3-tonal-btn" onclick="App.saveConfig()">Guardar</button>
   </div>
@@ -124,6 +124,7 @@
         <span class="field-label">Frecuencia</span>
         <div class="freq-row">
           <button class="freq-btn active" data-fq="mensual" onclick="App.setFreq('mensual')">Mensual</button>
+          <button class="freq-btn" data-fq="trimestral" onclick="App.setFreq('trimestral')">Trimestral</button>
           <button class="freq-btn" data-fq="semestral" onclick="App.setFreq('semestral')">Semestral</button>
           <button class="freq-btn" data-fq="anual" onclick="App.setFreq('anual')">Anual</button>
         </div>
@@ -148,6 +149,7 @@
       <div class="bh-row">
         <div class="bh-item"><span class="msr" style="font-size:16px;color:var(--inc)">arrow_upward</span><span class="bh-amount num pos" id="sumInc">0,00€</span><span class="bh-tag">Ingresos</span></div>
         <div class="bh-item"><span class="msr" style="font-size:16px;color:var(--exp)">arrow_downward</span><span class="bh-amount num neg" id="sumExp">0,00€</span><span class="bh-tag">Gastos</span></div>
+        <div class="bh-item" id="sumInvItem" style="display:none"><span class="msr" style="font-size:16px;color:#8BBFE8">trending_up</span><span class="bh-amount num inv" id="sumInv">0,00€</span><span class="bh-tag">Invertido</span></div>
       </div>
     </div>
     <button class="ytd-btn" onclick="App.openYTD()"><span class="msr">bar_chart</span> Ver Balance YTD</button>
@@ -194,7 +196,6 @@
     <div class="tx-list" id="statusList">
       <div class="empty"><span class="msr">bid_landscape</span><p>Sin status para este mes.</p></div>
     </div>
-    <div class="ytd-loading" id="statusLoading" style="display:none"><span class="spinner"></span> Cargando status...</div>
   </section>
 
   <!-- ========== RECURRENTES ========== -->
@@ -205,13 +206,14 @@
       <div class="sh-count" id="subsCount">0 activas</div>
     </div>
     <div class="subs-filter">
-      <button class="fchip active" data-sf="all" onclick="App.setSubFilter('all')">Todas</button>
-      <button class="fchip" data-sf="suscripcion" onclick="App.setSubFilter('suscripcion')">Suscripciones</button>
+      <button class="fchip active" data-sf="suscripcion" onclick="App.setSubFilter('suscripcion')">Suscripciones</button>
       <button class="fchip" data-sf="periodico" onclick="App.setSubFilter('periodico')">Peri&#243;dicos</button>
+      <button class="fchip" data-sf="all" onclick="App.setSubFilter('all')">Todos</button>
     </div>
     <div class="subs-filter subs-cycle-filter" id="subsCycleFilter" style="display:none">
       <button class="fchip active" data-cf="all" onclick="App.setSubCycleFilter('all')">Todos los ciclos</button>
       <button class="fchip" data-cf="mensual" onclick="App.setSubCycleFilter('mensual')">Mensual</button>
+      <button class="fchip" data-cf="trimestral" onclick="App.setSubCycleFilter('trimestral')">Trimestral</button>
       <button class="fchip" data-cf="semestral" onclick="App.setSubCycleFilter('semestral')">Semestral</button>
       <button class="fchip" data-cf="anual" onclick="App.setSubCycleFilter('anual')">Anual</button>
     </div>
@@ -226,6 +228,9 @@
       <div class="ih-label">Total invertido este mes</div>
       <div class="ih-val num-lg" id="invTotal">0,00€</div>
       <div class="ih-sub" id="invCount">0 aportaciones</div>
+    </div>
+    <div class="inv-bars-wrap">
+      <div class="inv-bars" id="invBars"></div>
     </div>
     <div class="month-pill">
       <button class="month-arrow" onclick="App.changeInvMonth(-1)"><span class="msr">chevron_left</span></button>
@@ -249,6 +254,9 @@
       <div class="ytd-row">
         <div class="ytd-item inc"><span class="msr" style="font-size:16px">arrow_upward</span><span class="num" id="ytdInc">0,00€</span><span class="ytd-tag">Ingresos</span></div>
         <div class="ytd-item exp"><span class="msr" style="font-size:16px">arrow_downward</span><span class="num" id="ytdExp">0,00€</span><span class="ytd-tag">Gastos</span></div>
+      </div>
+      <div class="ytd-row" id="ytdInvRow" style="display:none">
+        <div class="ytd-item inv"><span class="msr" style="font-size:16px">trending_up</span><span class="num" id="ytdInv">0,00€</span><span class="ytd-tag">Invertido</span></div>
       </div>
     </div>
     <div class="ytd-section-title"><span class="msr" style="font-size:18px">arrow_downward</span> Gastos por categor&#237;a</div>
@@ -312,6 +320,7 @@
       <span class="field-label">Frecuencia</span>
       <div class="freq-row" id="editTplFreqRow">
         <button class="freq-btn" data-efq="mensual" onclick="App.setEditTplFreq('mensual')">Mensual</button>
+        <button class="freq-btn" data-efq="trimestral" onclick="App.setEditTplFreq('trimestral')">Trimestral</button>
         <button class="freq-btn" data-efq="semestral" onclick="App.setEditTplFreq('semestral')">Semestral</button>
         <button class="freq-btn" data-efq="anual" onclick="App.setEditTplFreq('anual')">Anual</button>
       </div>
@@ -322,6 +331,32 @@
     </div>
     <input type="hidden" id="editTplId">
     <button class="m3-btn" onclick="App.saveEditTemplate()"><span class="msr">check</span> Guardar cambios</button>
+    <!-- Historial de pagos vinculados a esta plantilla -->
+    <div class="tpl-history">
+      <span class="field-label">&#218;ltimos pagos</span>
+      <div id="tplHistoryList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- COBRO MODAL -->
+<div class="modal-overlay" id="cobroModal" onclick="if(event.target===this)App.closeCobro()">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <span class="modal-title">Registrar cobro</span>
+      <button class="icon-btn" onclick="App.closeCobro()"><span class="msr">close</span></button>
+    </div>
+    <div class="cobro-info" id="cobroInfo"></div>
+    <div class="field-group">
+      <span class="field-label">Importe</span>
+      <input class="m3-input" type="text" id="cobroAmount" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" autocomplete="off">
+    </div>
+    <div class="field-group">
+      <span class="field-label">Fecha</span>
+      <input class="m3-input" type="date" id="cobroDate" autocomplete="off">
+    </div>
+    <input type="hidden" id="cobroTplId">
+    <button class="m3-btn" onclick="App.saveCobro()"><span class="msr">check</span> Confirmar cobro</button>
   </div>
 </div>
 
@@ -367,10 +402,15 @@
 </button>
 
 <div class="snackbar" id="snackbar"></div>
+<!-- Barra de progreso superior (solo para operaciones de escritura) -->
+<div class="top-progress" id="topProgress">
+  <div class="top-progress-bar" id="topProgressBar"></div>
+</div>
+<!-- Loader compacto (solo para save/delete, sin overlay oscuro) -->
 <div class="global-loader" id="globalLoader" aria-live="polite" aria-busy="true">
   <div class="global-loader-card">
     <span class="spinner"></span>
-    <span id="globalLoaderText">Cargando datos...</span>
+    <span id="globalLoaderText">Guardando...</span>
   </div>
 </div>
 

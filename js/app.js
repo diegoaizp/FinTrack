@@ -4,12 +4,16 @@ const App = {
   _statusSeq: 0,
   _reimbCandidates: [],
 
+  // Para operaciones de escritura (guardar, borrar): barra top + toast compacto
   async _withLoading(msg, fn) {
+    const bar = document.getElementById('topProgress');
+    if (bar) bar.classList.add('running');
     UI.showGlobalLoading(msg);
     try {
       return await fn();
     } finally {
       UI.hideGlobalLoading();
+      if (bar) bar.classList.remove('running');
     }
   },
 
@@ -21,6 +25,15 @@ const App = {
     UI.updateMonthLabel();
     UI.updateInvMonthLabel();
     UI.updateStatusMonthLabel();
+
+    // Restaurar filtro persistido
+    const savedFilter = localStorage.getItem('ft_filter');
+    if (savedFilter && savedFilter !== 'all') {
+      FT.filter = savedFilter;
+      document.querySelectorAll('.fchip[data-f]').forEach(b =>
+        b.classList.toggle('active', b.dataset.f === savedFilter)
+      );
+    }
 
     if (url) {
       this.loadAll();
@@ -46,43 +59,53 @@ const App = {
 
   // ===== DATA LOADING =====
   async loadAll() {
+    // Mostrar skeletons inmediatamente — sin overlay bloqueante
     UI.showSkeleton('txList');
-    UI.showGlobalLoading('Cargando categorías...');
+    UI.showHeroSkeleton();
+    UI.showStatusSkeleton();
+    UI.showInvHeroSkeleton();
+
     try {
-      // Phase 1: unlock register form as soon as categories are ready.
+      // Fase 1: categorías → habilita el formulario cuanto antes
       await API.loadCategories();
       UI.renderCats();
       this.updateReimbUI();
-      UI.hideGlobalLoading();
 
-      // Phase 2: load the rest in background.
+      // Fase 2: resto en paralelo
       await Promise.all([
         API.loadMonth(FT.year, FT.month),
         API.loadTemplates()
       ]);
+
+      UI.hideHeroSkeleton();
       UI.renderList();
       UI.updateSummary();
       UI.renderTemplates();
       UI.renderInvestments();
+      UI.hideInvHeroSkeleton();
+
       await this.loadStatusData({ showGlobal: false, reloadAccounts: true }).catch(() => {});
       UI.snack('Datos actualizados');
     } catch (e) {
-      UI.hideGlobalLoading();
-      UI.showError('txList', 'Error al cargar datos.<br>Revisa la URL y el despliegue.');
+      UI.hideHeroSkeleton();
+      UI.hideInvHeroSkeleton();
+      UI.showError('txList', 'Error al cargar datos.<br>Revisa la clave y la conexión.');
     }
   },
 
   async loadCurrentMonth() {
+    // Skeleton en lista y hero mientras recarga el mes
     UI.showSkeleton('txList');
-    await this._withLoading('Cargando historial...', async () => {
-      try {
-        await API.loadMonth(FT.year, FT.month);
-        UI.renderList();
-        UI.updateSummary();
-      } catch (e) {
-        UI.showError('txList', 'Error al cargar datos.');
-      }
-    });
+    UI.showHeroSkeleton();
+    try {
+      await API.loadMonth(FT.year, FT.month, true);
+      UI.hideHeroSkeleton();
+      UI.renderList();
+      UI.updateSummary();
+    } catch (e) {
+      UI.hideHeroSkeleton();
+      UI.showError('txList', 'Error al cargar datos.');
+    }
   },
 
   // ===== CONFIG =====
@@ -115,8 +138,17 @@ const App = {
     if (bnav) bnav.style.display = t === 'ytd' ? 'none' : '';
 
     if (t === 'form') setTimeout(() => document.getElementById('inputAmount').focus(), 150);
-    if (t === 'subs') UI.renderTemplates();
-    if (t === 'invest') UI.renderInvestments();
+    if (t === 'subs') {
+      // Sincronizar visibilidad del subfiltro de ciclos con el filtro actual
+      const cycleRow = document.getElementById('subsCycleFilter');
+      if (cycleRow) cycleRow.style.display = FT.subFilter !== 'all' ? '' : 'none';
+      UI.renderTemplates();
+    }
+    if (t === 'invest') {
+      UI.renderInvestments();
+      // Pre-carga los 5 meses anteriores en background para rellenar las barras
+      this._preloadInvHistory();
+    }
     if (t === 'status') this.loadStatusData({ showGlobal: true });
   },
 
@@ -446,14 +478,29 @@ const App = {
     if (FT.invMonth > 11) { FT.invMonth = 0; FT.invYear++; }
     if (FT.invMonth < 0) { FT.invMonth = 11; FT.invYear--; }
     UI.updateInvMonthLabel();
+    UI.showInvHeroSkeleton();
+    try {
+      await API.loadMonth(FT.invYear, FT.invMonth);
+      UI.renderInvestments();
+      this._preloadInvHistory();
+    } catch (e) {
+      UI.snack('Error al cargar inversiones');
+    } finally {
+      UI.hideInvHeroSkeleton();
+    }
+  },
 
-    // Load investment month data
-    await this._withLoading('Cargando inversiones...', async () => {
-      try {
-        await API.loadMonth(FT.invYear, FT.invMonth);
-        UI.renderInvestments();
-      } catch (e) {}
-    });
+  // Pre-carga en background los 5 meses anteriores al mes de inversión actual
+  // para rellenar las barras del gráfico sin bloquear la UI
+  _preloadInvHistory() {
+    for (let i = 1; i <= 5; i++) {
+      let m = FT.invMonth - i;
+      let y = FT.invYear;
+      if (m < 0) { m += 12; y--; }
+      if (!Cache.get(y, m)) {
+        API.loadMonth(y, m, false).then(() => UI._renderInvBars()).catch(() => {});
+      }
+    }
   },
 
   async changeStatusMonth(d) {
@@ -506,9 +553,8 @@ const App = {
     if (!url) return;
 
     const seq = ++this._statusSeq;
-    const loading = document.getElementById('statusLoading');
-    if (loading) loading.style.display = '';
-    if (showGlobal) UI.showGlobalLoading('Cargando status...');
+    // Al navegar al tab o cambiar mes: mostrar skeleton (en loadAll ya se muestra antes)
+    if (showGlobal) UI.showStatusSkeleton();
 
     try {
       if (reloadAccounts || !FT.statusAccounts.length) {
@@ -597,15 +643,13 @@ const App = {
     } catch (e) {
       const list = document.getElementById('statusList');
       if (list) list.innerHTML = `<div class="empty"><span class="msr">warning</span><p>${e.message || 'Error al cargar status.'}</p></div>`;
-    } finally {
-      if (loading) loading.style.display = 'none';
-      if (showGlobal) UI.hideGlobalLoading();
     }
   },
 
   // ===== FILTERS =====
   setFilter(f) {
     FT.filter = f;
+    localStorage.setItem('ft_filter', f);
     document.querySelectorAll('.fchip[data-f]').forEach(b =>
       b.classList.toggle('active', b.dataset.f === f)
     );
@@ -732,6 +776,8 @@ const App = {
     document.getElementById('ytdBalance').textContent = '0,00€';
     document.getElementById('ytdInc').textContent = '0,00€';
     document.getElementById('ytdExp').textContent = '0,00€';
+    const ytdInvRow = document.getElementById('ytdInvRow');
+    if (ytdInvRow) ytdInvRow.style.display = 'none';
 
     await this._withLoading('Cargando balance YTD...', async () => {
       try {
@@ -748,11 +794,14 @@ const App = {
         const results = await Promise.all(promises);
         results.forEach(items => allTx.push(...(items || [])));
 
-        // Calculate totals
-        const incTx = allTx.filter(t => t.type === 'Ingreso' && !isCompensatingBizum(t));
+        // Calculate totals (reembolsos excluidos de ingresos en todos los totales)
+        const incTx = allTx.filter(t => t.type === 'Ingreso' && !isReembolso(t));
         const expTx = allTx.filter(t => t.type === 'Gasto');
+        const invTx = allTx.filter(t => t.type === 'Inversión');
         const totalInc = incTx.reduce((s, t) => s + t.amount, 0);
         const totalExp = expTx.reduce((s, t) => s + t.amount, 0);
+        const totalInv = invTx.reduce((s, t) => s + t.amount, 0);
+        // YTD balance = Ingresos − Gastos (invertido es solo informativo aquí)
         const bal = totalInc - totalExp;
 
         document.getElementById('ytdInc').textContent = formatEUR(totalInc);
@@ -760,6 +809,12 @@ const App = {
         const bEl = document.getElementById('ytdBalance');
         bEl.textContent = formatSignedEUR(bal);
         bEl.className = 'bh-val num-lg ' + (bal > 0 ? 'positive' : bal < 0 ? 'negative' : '');
+
+        // Línea Invertido (visible solo si hay inversiones en el año)
+        const ytdInvRow = document.getElementById('ytdInvRow');
+        if (ytdInvRow) ytdInvRow.style.display = totalInv > 0 ? '' : 'none';
+        const ytdInvEl = document.getElementById('ytdInv');
+        if (ytdInvEl) ytdInvEl.textContent = formatEUR(totalInv);
 
         // Group by category
         UI.renderYTDCategories(expTx, 'ytdExpCats', 'exp');
@@ -815,11 +870,83 @@ const App = {
     document.querySelectorAll('#editTplFreqRow .freq-btn').forEach(b =>
       b.classList.toggle('active', b.dataset.efq === this._editTplFreq)
     );
+    UI.renderTemplateHistory(pid);
     document.getElementById('editTplModal').classList.add('show');
   },
 
   closeEditTemplate() {
     document.getElementById('editTplModal').classList.remove('show');
+  },
+
+  // ===== COBRO RÁPIDO DESDE PLANTILLA =====
+  openCobro(pid) {
+    const t = FT.templates.find(x => x.id === pid);
+    if (!t) return;
+    document.getElementById('cobroTplId').value = pid;
+    document.getElementById('cobroAmount').value = t.amount;
+    document.getElementById('cobroDate').value = todayStr();
+    const ic = catIcon(t.category);
+    const sub = t.subcategory ? ' / ' + t.subcategory : '';
+    const freqMap = { mensual: 'Mensual', trimestral: 'Trimestral', semestral: 'Semestral', anual: 'Anual' };
+    document.getElementById('cobroInfo').innerHTML = `
+      <div class="ci-icon"><span class="msr filled">${ic}</span></div>
+      <div>
+        <div class="ci-name">${esc(t.description || t.category)}</div>
+        <div class="ci-detail">${esc(t.category)}${esc(sub)} · ${freqMap[t.frequency] || t.frequency}</div>
+      </div>`;
+    document.getElementById('cobroModal').classList.add('show');
+  },
+
+  closeCobro() {
+    document.getElementById('cobroModal').classList.remove('show');
+  },
+
+  async saveCobro() {
+    const pid = document.getElementById('cobroTplId').value;
+    const amount = parseAmount(document.getElementById('cobroAmount').value);
+    const date = document.getElementById('cobroDate').value;
+
+    if (!amount || amount <= 0) { UI.snack('Introduce un importe'); return; }
+    if (!date) { UI.snack('Introduce una fecha'); return; }
+
+    const tpl = FT.templates.find(x => x.id === pid);
+    if (!tpl) return;
+
+    await this._withLoading('Registrando cobro...', async () => {
+      try {
+        // 1. Crear movimiento vinculado a la plantilla
+        const id = genId('m');
+        await API.addMovimiento({
+          id,
+          fecha: date,
+          tipo: tpl.type,
+          ambito: tpl.scope || 'Personal',
+          categoria: tpl.category,
+          subcategoria: tpl.subcategory || '',
+          descripcion: tpl.description || '',
+          importe: amount,
+          recurrencia: tpl.recurrence || '',
+          frecuencia: tpl.frequency || '',
+          plantilla_id: pid,   // ← vínculo clave
+          estado: 'activo',
+          creado: nowISO(),
+          modificado: nowISO()
+        });
+
+        // 2. Avanzar la fecha próxima en la plantilla
+        const base = tpl.next && tpl.next >= date ? tpl.next : date;
+        const newProxima = calcNextDate(base, tpl.frequency);
+        await API.updateTemplate(pid, { proxima: newProxima });
+
+        this.closeCobro();
+        UI.renderList();
+        UI.updateSummary();
+        UI.renderTemplates();
+        UI.snack('Cobro registrado ✓');
+      } catch (e) {
+        UI.snack('Error al registrar cobro');
+      }
+    });
   },
 
   setEditTplFreq(f) {
@@ -837,14 +964,26 @@ const App = {
 
     if (!amount) { UI.snack('Introduce un importe'); return; }
 
+    // Recalcular proxima si cambiaron frecuencia o día de cobro
+    const tpl = FT.templates.find(x => x.id === pid);
+    const freqChanged = tpl && this._editTplFreq !== tpl.frequency;
+    const dayChanged  = tpl && day !== tpl.dayOfCharge;
+    let newProxima;
+    if (tpl && (freqChanged || dayChanged)) {
+      const baseDate = todayStr().slice(0, 8) + String(day).padStart(2, '0');
+      newProxima = calcNextDate(baseDate, this._editTplFreq);
+    }
+
     await this._withLoading('Guardando recurrencia...', async () => {
       try {
-        await API.updateTemplate(pid, {
+        const fields = {
           descripcion: desc,
           importe: amount,
           frecuencia: this._editTplFreq,
           dia_cobro: day
-        });
+        };
+        if (newProxima) fields.proxima = newProxima;
+        await API.updateTemplate(pid, fields);
         this.closeEditTemplate();
         UI.renderTemplates();
         UI.snack('Recurrencia actualizada');
@@ -894,7 +1033,7 @@ const App = {
           month: FT.statusMonth + 1,
           cuenta_id: item.accountId,
           saldo: item.amount,
-          ha_stat: date,
+          fecha_status: date,
           estado: 'activo'
         })));
         this.closeStatusAdd();
@@ -925,7 +1064,7 @@ const App = {
     const date = document.getElementById('statusEditDate').value || todayStr();
     await this._withLoading('Actualizando status...', async () => {
       try {
-        await API.updateStatusEntry(id, { saldo: amount, ha_stat: date });
+        await API.updateStatusEntry(id, { saldo: amount, fecha_status: date });
         this.closeEditStatus();
         await this.loadStatusData({ showGlobal: false });
         UI.snack('Status actualizado');
