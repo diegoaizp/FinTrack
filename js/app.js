@@ -234,18 +234,8 @@ const App = {
       for (let i = 0; i < 6; i++) {
         const d = new Date(pivot.getFullYear(), pivot.getMonth() - i, 1);
         jobs.push(
-          fetch(`${url}?action=getMonth&year=${d.getFullYear()}&month=${d.getMonth() + 1}`)
-            .then(r => r.json())
-            .then(rows => (rows || []).map(r => ({
-              id: String(r[0] || ''),
-              date: String(r[1] || ''),
-              type: String(r[2] || ''),
-              category: String(r[4] || ''),
-              subcategory: String(r[5] || ''),
-              description: String(r[6] || ''),
-              amount: parseAmount(r[7]),
-              status: String(r[11] || 'activo').toLowerCase().trim()
-            })).filter(x => x.status === 'activo' && x.type === 'Gasto' && x.amount > 0))
+          API.loadMonth(d.getFullYear(), d.getMonth(), true)
+            .then(items => (items || []).filter(x => x.status === 'activo' && x.type === 'Gasto' && x.amount > 0))
         );
       }
 
@@ -290,13 +280,8 @@ const App = {
     for (let i = 0; i < 6; i++) {
       const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
       try {
-        const rows = await fetch(`${url}?action=getMonth&year=${d.getFullYear()}&month=${d.getMonth() + 1}`).then(r => r.json());
-        const found = (rows || []).map(r => ({
-          id: String(r[0] || ''),
-          type: String(r[2] || ''),
-          amount: parseAmount(r[7]),
-          status: String(r[11] || 'activo').toLowerCase().trim()
-        })).find(x => x.id === expenseId && x.status === 'activo' && x.type === 'Gasto');
+        const items = await API.loadMonth(d.getFullYear(), d.getMonth(), true);
+        const found = (items || []).find(x => x.id === expenseId && x.status === 'activo' && x.type === 'Gasto');
         if (found) return found;
       } catch (e) {}
     }
@@ -752,25 +737,16 @@ const App = {
       try {
         // Load all months for the year
         const allTx = [];
-        const url = API.getUrl();
-        if (!url) { UI.snack('Configura la URL primero'); return; }
+        if (!API.getUrl()) { UI.snack('Configura la URL primero'); return; }
 
-        // Load each month Jan–current
+        // Load each month Jan–current using Supabase API
         const currentMonth = new Date().getFullYear() === year ? new Date().getMonth() : 11;
         const promises = [];
         for (let m = 0; m <= currentMonth; m++) {
-          promises.push(
-            fetch(`${url}?action=getMonth&year=${year}&month=${m + 1}`)
-              .then(r => r.json())
-              .then(rows => (rows || []).map(r => ({
-                type: r[2], category: r[4], subcategory: r[5] || '',
-                templateId: r[10] || '',
-                amount: parseAmount(r[7]), status: String(r[11] || 'activo').toLowerCase().trim()
-              })).filter(t => t.status === 'activo'))
-          );
+          promises.push(API.loadMonth(year, m, true));
         }
         const results = await Promise.all(promises);
-        results.forEach(items => allTx.push(...items));
+        results.forEach(items => allTx.push(...(items || [])));
 
         // Calculate totals
         const incTx = allTx.filter(t => t.type === 'Ingreso' && !isCompensatingBizum(t));

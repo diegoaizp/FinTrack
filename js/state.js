@@ -54,7 +54,7 @@ const Cache = {
       if (!raw) return null;
       const data = JSON.parse(raw);
       // Check staleness (3 min)
-      if (Date.now() - (data._ts || 0) > 3 * 60 * 1000) return null;
+      if (Date.now() - (data._ts || 0) > 30 * 1000) return null;
       return data.items;
     } catch (e) { return null; }
   },

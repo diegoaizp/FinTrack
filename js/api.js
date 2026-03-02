@@ -1,46 +1,79 @@
-// ===== FinTrack API Module =====
+// ===== FinTrack API Module — Supabase =====
+
+const SUPABASE_URL = 'https://akbhflfrusuakvpimwcu.supabase.co';
+
+// La anon key se guarda en localStorage: sin ella no se puede acceder.
+let _sb = null;
+
+function _getSbKey() {
+  return localStorage.getItem('ft_sb_key') || '';
+}
+
+function _initSb() {
+  const key = _getSbKey();
+  if (!key) { _sb = null; return null; }
+  if (!_sb) _sb = window.supabase.createClient(SUPABASE_URL, key);
+  return _sb;
+}
+
+function sbCheck(error, label) {
+  if (error) throw new Error(`[${label}] ${error.message}`);
+}
 
 const API = {
-  _expectArray(rows, label) {
-    if (Array.isArray(rows)) return rows;
-    const msg = rows && rows.error ? rows.error : `Respuesta inválida en ${label}`;
-    throw new Error(msg);
-  },
 
-  getUrl() {
-    return localStorage.getItem('ft_url') || '';
-  },
+  // ── getUrl() devuelve truthy sólo si hay key configurada ─────────────
+  getUrl() { return _getSbKey() ? SUPABASE_URL : ''; },
 
-  setUrl(url) {
-    localStorage.setItem('ft_url', url);
+  setUrl(key) {
+    key = (key || '').trim();
+    if (key) {
+      localStorage.setItem('ft_sb_key', key);
+    } else {
+      localStorage.removeItem('ft_sb_key');
+    }
+    // Re-crear el cliente con la nueva key
+    _sb = null;
+    _initSb();
   },
 
   // ===== READ =====
 
   async loadMonth(year, month, force = false) {
-    const url = this.getUrl();
-    if (!url) return null;
-
-    // Check cache first
     const cached = force ? null : Cache.get(year, month);
-    if (cached) {
-      FT.tx = cached;
-      return cached;
-    }
+    if (cached) { FT.tx = cached; return cached; }
 
-    const res = await fetch(`${url}?action=getMonth&year=${year}&month=${month + 1}`);
-    const raw = await res.json();
-    const rows = this._expectArray(raw, 'getMonth');
+    const m     = month + 1; // la app usa mes 0-based
+    const start = `${year}-${String(m).padStart(2, '0')}-01`;
+    const end   = m === 12
+      ? `${year + 1}-01-01`
+      : `${year}-${String(m + 1).padStart(2, '0')}-01`;
 
-    const items = (rows || []).map(r => ({
-      id: r[0], date: r[1], type: r[2], scope: r[3],
-      category: r[4], subcategory: r[5] || '',
-      description: r[6] || '', amount: parseAmount(r[7]),
-      recurrence: String(r[8] || '').toLowerCase().trim(),
-      frequency: String(r[9] || '').toLowerCase().trim(),
-      templateId: r[10] || '', status: String(r[11] || 'activo').toLowerCase().trim(),
-      created: r[12] || '', updated: r[13] || ''
-    })).filter(t => t.status === 'activo');
+    const { data, error } = await _initSb()
+      .from('movimientos')
+      .select('*')
+      .gte('fecha', start)
+      .lt('fecha', end)
+      .eq('estado', 'activo');
+
+    sbCheck(error, 'loadMonth');
+
+    const items = (data || []).map(r => ({
+      id:          r.id,
+      date:        r.fecha,
+      type:        r.tipo,
+      scope:       r.ambito,
+      category:    r.categoria,
+      subcategory: r.subcategoria  || '',
+      description: r.descripcion   || '',
+      amount:      parseAmount(r.importe),
+      recurrence:  String(r.recurrencia || '').toLowerCase().trim(),
+      frequency:   String(r.frecuencia  || '').toLowerCase().trim(),
+      templateId:  r.plantilla_id  || '',
+      status:      String(r.estado || 'activo').toLowerCase().trim(),
+      created:     r.creado        || '',
+      updated:     r.modificado    || ''
+    }));
 
     Cache.set(year, month, items);
     FT.tx = items;
@@ -48,20 +81,27 @@ const API = {
   },
 
   async loadTemplates() {
-    const url = this.getUrl();
-    if (!url) return null;
-    const res = await fetch(`${url}?action=getTemplates`);
-    const raw = await res.json();
-    const rows = this._expectArray(raw, 'getTemplates');
+    const { data, error } = await _initSb()
+      .from('plantillas')
+      .select('*')
+      .neq('estado', 'eliminado');
 
-    FT.templates = (rows || []).map(r => ({
-      id: r[0], type: r[1], scope: r[2], category: r[3],
-      subcategory: r[4], description: r[5],
-      amount: parseAmount(r[6]),
-      recurrence: String(r[7] || '').toLowerCase().trim(),
-      frequency: String(r[8] || '').toLowerCase().trim(),
-      dayOfCharge: parseInt(r[9], 10) || 1,
-      start: r[10], next: r[11], status: String(r[12] || 'activo').toLowerCase().trim()
+    sbCheck(error, 'loadTemplates');
+
+    FT.templates = (data || []).map(r => ({
+      id:          r.plantilla_id,
+      type:        r.tipo,
+      scope:       r.ambito,
+      category:    r.categoria,
+      subcategory: r.subcategoria || '',
+      description: r.descripcion  || '',
+      amount:      parseAmount(r.importe),
+      recurrence:  String(r.recurrencia || '').toLowerCase().trim(),
+      frequency:   String(r.frecuencia  || '').toLowerCase().trim(),
+      dayOfCharge: parseInt(r.dia_cobro, 10) || 1,
+      start:       r.inicio   || '',
+      next:        r.proxima  || '',
+      status:      String(r.estado || 'activo').toLowerCase().trim()
     }));
 
     FT.tplLoaded = true;
@@ -69,15 +109,20 @@ const API = {
   },
 
   async loadCategories() {
-    const url = this.getUrl();
-    if (!url) return null;
-    const res = await fetch(`${url}?action=getCategories`);
-    const raw = await res.json();
-    const rows = this._expectArray(raw, 'getCategories');
+    const { data, error } = await _initSb()
+      .from('categorias')
+      .select('*')
+      .eq('estado', 'activo');
 
-    FT.categories = (rows || []).map(r => ({
-      tipo: r[0], categoria: r[1], subcategoria: r[2],
-      icono: r[3], origen: r[4], estado: r[5] || 'activo'
+    sbCheck(error, 'loadCategories');
+
+    FT.categories = (data || []).map(r => ({
+      tipo:         r.tipo,
+      categoria:    r.categoria,
+      subcategoria: r.subcategoria || '',
+      icono:        r.icono        || '',
+      origen:       r.origen       || 'sistema',
+      estado:       r.estado       || 'activo'
     }));
 
     FT.catsLoaded = true;
@@ -89,25 +134,24 @@ const API = {
   },
 
   async loadStatusAccounts() {
-    const url = this.getUrl();
-    if (!url) return [];
-    const res = await fetch(`${url}?action=getStatusAccounts`);
-    const raw = await res.json();
-    const rows = this._expectArray(raw, 'getStatusAccounts');
+    const { data, error } = await _initSb()
+      .from('status_accounts')
+      .select('*')
+      .eq('estado', 'activo')
+      .order('orden', { ascending: true });
 
-    const active = (rows || []).map(r => ({
-      id: String(r[0] || ''),
-      name: String(r[1] || ''),
-      type: String(r[2] || '').toLowerCase().trim(),
-      icon: String(r[3] || 'account_balance_wallet'),
-      order: parseInt(r[4], 10) || 9999,
-      status: String(r[5] || 'activo').toLowerCase().trim()
-    })).filter(a => a.id && a.status === 'activo')
-      .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+    sbCheck(error, 'loadStatusAccounts');
 
     const uniq = {};
-    FT.statusAccounts = active.filter(a => {
-      if (uniq[a.id]) return false;
+    FT.statusAccounts = (data || []).map(r => ({
+      id:     r.cuenta_id,
+      name:   r.nombre,
+      type:   String(r.tipo   || '').toLowerCase().trim(),
+      icon:   r.icono         || 'account_balance_wallet',
+      order:  parseInt(r.orden, 10) || 9999,
+      status: String(r.estado || 'activo').toLowerCase().trim()
+    })).filter(a => {
+      if (!a.id || uniq[a.id]) return false;
       uniq[a.id] = true;
       return true;
     });
@@ -119,20 +163,23 @@ const API = {
     const key = this._statusKey(year, month);
     if (FT.statusCache[key]) return FT.statusCache[key];
 
-    const url = this.getUrl();
-    if (!url) return [];
-    const res = await fetch(`${url}?action=getStatusMonth&year=${year}&month=${month + 1}`);
-    const raw = await res.json();
-    const rows = this._expectArray(raw, 'getStatusMonth');
+    const { data, error } = await _initSb()
+      .from('status_monthly')
+      .select('*')
+      .eq('year', year)
+      .eq('month', month + 1)   // la app usa mes 0-based
+      .eq('estado', 'activo');
 
-    const items = (rows || []).map(r => ({
-      id: String(r[0] || ''),
-      year: parseInt(r[1], 10) || year,
-      month: parseInt(r[2], 10) || (month + 1),
-      accountId: String(r[3] || ''),
-      amount: parseAmount(r[4]),
-      statusDate: String(r[5] || ''),
-      status: String(r[6] || 'activo').toLowerCase().trim()
+    sbCheck(error, 'fetchStatusMonth');
+
+    const items = (data || []).map(r => ({
+      id:         r.status_id,
+      year:       parseInt(r.year,  10) || year,
+      month:      parseInt(r.month, 10) || (month + 1),
+      accountId:  r.cuenta_id    || '',
+      amount:     parseAmount(r.saldo),
+      statusDate: r.fecha_status || '',
+      status:     String(r.estado || 'activo').toLowerCase().trim()
     })).filter(x => x.status === 'activo');
 
     FT.statusCache[key] = items;
@@ -145,16 +192,11 @@ const API = {
     return entries;
   },
 
-  // Load everything needed on startup (always fresh, bypass cache)
+  // Carga completa al arrancar
   async loadAll() {
-    const url = this.getUrl();
-    if (!url) throw new Error('No URL');
-
-    // Clear ALL cache to force fresh data from server
     Cache.clearAll();
     FT.statusCache = {};
 
-    // Parallel load
     const [monthData, templates, categories] = await Promise.all([
       this.loadMonth(FT.year, FT.month),
       this.loadTemplates(),
@@ -164,114 +206,190 @@ const API = {
     return { monthData, templates, categories };
   },
 
-  // ===== WRITE =====
-
-  async post(data) {
-    const url = this.getUrl();
-    if (!url) throw new Error('No URL');
-    await fetch(url, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify(data)
-    });
-  },
+  // ===== WRITE: MOVIMIENTOS =====
 
   async addMovimiento(entry) {
-    await this.post({ action: 'add', ...entry });
-    // Optimistic update
+    const now = new Date().toISOString();
+    const { error } = await _initSb().from('movimientos').insert({
+      id:           entry.id,
+      fecha:        entry.fecha,
+      tipo:         entry.tipo,
+      ambito:       entry.ambito,
+      categoria:    entry.categoria,
+      subcategoria: entry.subcategoria  || '',
+      descripcion:  entry.descripcion   || '',
+      importe:      entry.importe,
+      recurrencia:  entry.recurrencia   || '',
+      frecuencia:   entry.frecuencia    || '',
+      plantilla_id: entry.plantilla_id  || null,
+      estado:       entry.estado        || 'activo',
+      creado:       entry.creado        || now,
+      modificado:   entry.modificado    || now
+    });
+    sbCheck(error, 'addMovimiento');
+
+    // Actualización optimista
     FT.tx.push({
       id: entry.id, date: entry.fecha, type: entry.tipo,
       scope: entry.ambito, category: entry.categoria,
-      subcategory: entry.subcategoria, description: entry.descripcion,
-      amount: parseAmount(entry.importe),
-      recurrence: String(entry.recurrencia || '').toLowerCase().trim(),
-      frequency: String(entry.frecuencia || '').toLowerCase().trim(),
-      templateId: entry.plantilla_id || '',
-      status: 'activo', created: entry.creado || '', updated: entry.modificado || ''
+      subcategory: entry.subcategoria  || '',
+      description: entry.descripcion   || '',
+      amount:      parseAmount(entry.importe),
+      recurrence:  String(entry.recurrencia || '').toLowerCase().trim(),
+      frequency:   String(entry.frecuencia  || '').toLowerCase().trim(),
+      templateId:  entry.plantilla_id  || '',
+      status: 'activo', created: entry.creado || now, updated: entry.modificado || now
     });
     Cache.invalidateCurrent();
   },
 
+  async updateMovimiento(id, fields) {
+    const update = { modificado: fields.modificado || new Date().toISOString() };
+    if (fields.descripcion  !== undefined) update.descripcion  = fields.descripcion;
+    if (fields.importe      !== undefined) update.importe      = fields.importe;
+    if (fields.fecha        !== undefined) update.fecha        = fields.fecha;
+    if (fields.categoria    !== undefined) update.categoria    = fields.categoria;
+    if (fields.subcategoria !== undefined) update.subcategoria = fields.subcategoria;
+
+    const { error } = await _initSb()
+      .from('movimientos').update(update).eq('id', id);
+    sbCheck(error, 'updateMovimiento');
+
+    const tx = FT.tx.find(t => t.id === id);
+    if (tx) {
+      if (fields.descripcion  !== undefined) tx.description = fields.descripcion;
+      if (fields.importe      !== undefined) tx.amount      = parseAmount(fields.importe);
+      if (fields.fecha        !== undefined) tx.date        = fields.fecha;
+      if (fields.categoria    !== undefined) tx.category    = fields.categoria;
+      if (fields.subcategoria !== undefined) tx.subcategory = fields.subcategoria;
+      tx.updated = update.modificado;
+    }
+    Cache.invalidateCurrent();
+  },
+
+  async deleteMovimiento(id) {
+    const { error } = await _initSb()
+      .from('movimientos').delete().eq('id', id);
+    sbCheck(error, 'deleteMovimiento');
+
+    FT.tx = FT.tx.filter(t => t.id !== id);
+    Cache.invalidateCurrent();
+  },
+
+  // ===== WRITE: PLANTILLAS =====
+
   async addTemplate(tpl) {
-    await this.post({ action: 'addTemplate', ...tpl });
-    // Optimistic update
+    const now = new Date().toISOString();
+    const { error } = await _initSb().from('plantillas').insert({
+      plantilla_id: tpl.plantilla_id,
+      tipo:         tpl.tipo,
+      ambito:       tpl.ambito,
+      categoria:    tpl.categoria,
+      subcategoria: tpl.subcategoria || '',
+      descripcion:  tpl.descripcion  || '',
+      importe:      tpl.importe,
+      recurrencia:  tpl.recurrencia,
+      frecuencia:   tpl.frecuencia,
+      dia_cobro:    tpl.dia_cobro    || 1,
+      inicio:       tpl.inicio       || null,
+      proxima:      tpl.proxima      || null,
+      estado:       tpl.estado       || 'activo',
+      creado:       now
+    });
+    sbCheck(error, 'addTemplate');
+
     FT.templates.push({
       id: tpl.plantilla_id, type: tpl.tipo, scope: tpl.ambito,
-      category: tpl.categoria, subcategory: tpl.subcategoria,
-      description: tpl.descripcion, amount: parseAmount(tpl.importe),
+      category: tpl.categoria, subcategory: tpl.subcategoria || '',
+      description: tpl.descripcion || '', amount: parseAmount(tpl.importe),
       recurrence: String(tpl.recurrencia || '').toLowerCase().trim(),
-      frequency: String(tpl.frecuencia || '').toLowerCase().trim(),
-      dayOfCharge: tpl.dia_cobro, start: tpl.inicio,
-      next: tpl.proxima, status: 'activo'
+      frequency:  String(tpl.frecuencia  || '').toLowerCase().trim(),
+      dayOfCharge: tpl.dia_cobro || 1,
+      start: tpl.inicio || '', next: tpl.proxima || '', status: 'activo'
     });
   },
 
+  async updateTemplate(pid, fields) {
+    const update = {};
+    if (fields.descripcion  !== undefined) update.descripcion  = fields.descripcion;
+    if (fields.importe      !== undefined) update.importe      = fields.importe;
+    if (fields.categoria    !== undefined) update.categoria    = fields.categoria;
+    if (fields.subcategoria !== undefined) update.subcategoria = fields.subcategoria;
+    if (fields.frecuencia   !== undefined) update.frecuencia   = fields.frecuencia;
+    if (fields.dia_cobro    !== undefined) update.dia_cobro    = fields.dia_cobro;
+
+    const { error } = await _initSb()
+      .from('plantillas').update(update).eq('plantilla_id', pid);
+    sbCheck(error, 'updateTemplate');
+
+    const t = FT.templates.find(x => x.id === pid);
+    if (t) {
+      if (fields.descripcion  !== undefined) t.description = fields.descripcion;
+      if (fields.importe      !== undefined) t.amount      = parseAmount(fields.importe);
+      if (fields.categoria    !== undefined) t.category    = fields.categoria;
+      if (fields.subcategoria !== undefined) t.subcategory = fields.subcategoria;
+      if (fields.frecuencia   !== undefined) t.frequency   = fields.frecuencia;
+      if (fields.dia_cobro    !== undefined) t.dayOfCharge = fields.dia_cobro;
+    }
+  },
+
+  async toggleTemplate(pid, activate) {
+    const estado = activate ? 'activo' : 'pausado';
+    const { error } = await _initSb()
+      .from('plantillas').update({ estado }).eq('plantilla_id', pid);
+    sbCheck(error, 'toggleTemplate');
+
+    const t = FT.templates.find(x => x.id === pid);
+    if (t) t.status = estado;
+  },
+
+  async deleteTemplate(pid) {
+    const { error } = await _initSb()
+      .from('plantillas').delete().eq('plantilla_id', pid);
+    sbCheck(error, 'deleteTemplate');
+
+    FT.templates = FT.templates.filter(x => x.id !== pid);
+  },
+
+  // ===== WRITE: CATEGORÍAS =====
+
   async addCategory(tipo, cat, sub, icon) {
-    await this.post({
-      action: 'addCategory',
-      tipo, categoria: cat, subcategoria: sub, icono: icon
+    const { error } = await _initSb().from('categorias').insert({
+      tipo, categoria: cat, subcategoria: sub,
+      icono: icon, origen: 'usuario', estado: 'activo'
     });
-    // Optimistic update
+    sbCheck(error, 'addCategory');
+
     FT.categories.push({
       tipo, categoria: cat, subcategoria: sub,
       icono: icon, origen: 'usuario', estado: 'activo'
     });
   },
 
-  async updateMovimiento(id, fields) {
-    await this.post({ action: 'update', id, ...fields });
-    // Optimistic update
-    const tx = FT.tx.find(t => t.id === id);
-    if (tx) {
-      if (fields.descripcion !== undefined) tx.description = fields.descripcion;
-      if (fields.importe !== undefined) tx.amount = parseAmount(fields.importe);
-      if (fields.fecha !== undefined) tx.date = fields.fecha;
-      if (fields.categoria !== undefined) tx.category = fields.categoria;
-      if (fields.subcategoria !== undefined) tx.subcategory = fields.subcategoria;
-      if (fields.modificado !== undefined) tx.updated = fields.modificado;
-    }
-    Cache.invalidateCurrent();
-  },
-
-  async deleteMovimiento(id) {
-    await this.post({ action: 'delete', id });
-    FT.tx = FT.tx.filter(t => t.id !== id);
-    Cache.invalidateCurrent();
-  },
-
-  async toggleTemplate(pid, activate) {
-    const action = activate ? 'activateTemplate' : 'pauseTemplate';
-    await this.post({ action, plantilla_id: pid });
-    const t = FT.templates.find(x => x.id === pid);
-    if (t) t.status = activate ? 'activo' : 'pausado';
-  },
-
-  async updateTemplate(pid, fields) {
-    await this.post({ action: 'updateTemplate', plantilla_id: pid, ...fields });
-    const t = FT.templates.find(x => x.id === pid);
-    if (t) {
-      if (fields.descripcion !== undefined) t.description = fields.descripcion;
-      if (fields.importe !== undefined) t.amount = fields.importe;
-      if (fields.categoria !== undefined) t.category = fields.categoria;
-      if (fields.subcategoria !== undefined) t.subcategory = fields.subcategoria;
-      if (fields.frecuencia !== undefined) t.frequency = fields.frecuencia;
-      if (fields.dia_cobro !== undefined) t.dayOfCharge = fields.dia_cobro;
-    }
-  },
-
-  async deleteTemplate(pid) {
-    await this.post({ action: 'deleteTemplate', plantilla_id: pid });
-    FT.templates = FT.templates.filter(x => x.id !== pid);
-  },
+  // ===== WRITE: STATUS =====
 
   async addStatusEntry(entry) {
-    await this.post({ action: 'addStatusEntry', ...entry });
+    const { error } = await _initSb().from('status_monthly').insert({
+      status_id:    entry.status_id,
+      year:         entry.year,
+      month:        entry.month,
+      cuenta_id:    entry.cuenta_id,
+      saldo:        entry.saldo,
+      fecha_status: entry.fecha_status || null,
+      estado:       entry.estado       || 'activo'
+    });
+    sbCheck(error, 'addStatusEntry');
     FT.statusCache = {};
   },
 
   async updateStatusEntry(id, fields) {
-    await this.post({ action: 'updateStatusEntry', status_id: id, ...fields });
+    const update = {};
+    if (fields.saldo        !== undefined) update.saldo        = fields.saldo;
+    if (fields.fecha_status !== undefined) update.fecha_status = fields.fecha_status;
+
+    const { error } = await _initSb()
+      .from('status_monthly').update(update).eq('status_id', id);
+    sbCheck(error, 'updateStatusEntry');
     FT.statusCache = {};
   }
 };

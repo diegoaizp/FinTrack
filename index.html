@@ -28,9 +28,9 @@
 
   <!-- CONFIG -->
   <div class="config-sheet" id="configSheet">
-    <span class="field-label">URL del Apps Script</span>
-    <input class="m3-input" type="text" id="scriptUrl" placeholder="https://script.google.com/macros/s/.../exec">
-    <div class="config-hint">Pega la URL de tu Google Apps Script desplegado como webapp.</div>
+    <span class="field-label">Clave de acceso</span>
+    <input class="m3-input" type="password" id="scriptUrl" placeholder="Pega tu clave de Supabase (anon key)">
+    <div class="config-hint">Pega la anon key de tu proyecto Supabase. Se guarda sólo en este navegador.</div>
     <button class="m3-tonal-btn" onclick="App.saveConfig()">Guardar</button>
   </div>
 
@@ -59,7 +59,7 @@
 
     <div class="amount-box">
       <span class="field-label">Importe</span>
-      <input class="m3-input" type="number" id="inputAmount" placeholder="0.00" step="0.01" min="0" inputmode="decimal">
+      <input class="m3-input" type="text" id="inputAmount" placeholder="0,00" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*">
       <span class="cur">&#8364;</span>
     </div>
 
@@ -128,7 +128,7 @@
           <button class="freq-btn" data-fq="anual" onclick="App.setFreq('anual')">Anual</button>
         </div>
         <span class="field-label">D&#237;a de cobro</span>
-        <input type="number" class="day-input" id="inputDay" value="1" min="1" max="31">
+        <input type="text" class="day-input" id="inputDay" value="1" min="1" max="31">
       </div>
     </div>
   </section>
@@ -281,7 +281,7 @@
     </div>
     <div class="field-group">
       <span class="field-label">Importe</span>
-      <input class="m3-input" type="number" id="editAmount" step="0.01" inputmode="decimal">
+      <input class="m3-input" type="text" id="editAmount" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*">
     </div>
     <div class="field-group">
       <span class="field-label">Fecha</span>
@@ -306,7 +306,7 @@
     </div>
     <div class="field-group">
       <span class="field-label">Importe</span>
-      <input class="m3-input" type="number" id="editTplAmount" step="0.01" inputmode="decimal">
+      <input class="m3-input" type="text" id="editTplAmount" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*">
     </div>
     <div class="field-group">
       <span class="field-label">Frecuencia</span>
@@ -318,7 +318,7 @@
     </div>
     <div class="field-group">
       <span class="field-label">D&#237;a de cobro</span>
-      <input type="number" class="day-input" id="editTplDay" value="1" min="1" max="31">
+      <input type="text" class="day-input" id="editTplDay" value="1" min="1" max="31">
     </div>
     <input type="hidden" id="editTplId">
     <button class="m3-btn" onclick="App.saveEditTemplate()"><span class="msr">check</span> Guardar cambios</button>
@@ -350,7 +350,7 @@
     </div>
     <div class="field-group">
       <span class="field-label">Importe</span>
-      <input class="m3-input" type="number" id="statusEditAmount" step="0.01" inputmode="decimal">
+      <input class="m3-input" type="text" id="statusEditAmount" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*">
     </div>
     <div class="field-group">
       <span class="field-label">Fecha del status</span>
@@ -374,6 +374,8 @@
   </div>
 </div>
 
+<!-- Supabase client -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- JS Modules -->
 <script src="js/state.js"></script>
 <script src="js/api.js"></script>
