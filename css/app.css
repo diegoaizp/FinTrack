@@ -347,6 +347,9 @@ body.app-loading .app-shell{filter:blur(4px);pointer-events:none;user-select:non
 .ytd-item.inc{color:var(--inc)}
 .ytd-item.exp{color:var(--exp)}
 .ytd-tag{font-size:.68rem;color:var(--md-on-primary-c);opacity:.7;letter-spacing:.3px}
+.ytd-avg-row{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.1)}
+.ytd-avg-label{font-size:.72rem;color:var(--md-on-primary-c);opacity:.7;letter-spacing:.3px}
+.ytd-avg-val{font-size:.9rem;color:var(--exp);font-weight:500}
 .ytd-section-title{display:flex;align-items:center;gap:6px;font-size:.82rem;font-weight:600;color:var(--md-on-surface-var);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
 .ytd-cat-list{display:flex;flex-direction:column;gap:8px}
 .ytd-cat-card{display:flex;align-items:center;gap:14px;padding:14px 16px;background:var(--md-surface-cl);border-radius:var(--r-lg)}

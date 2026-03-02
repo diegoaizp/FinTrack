@@ -776,6 +776,8 @@ const App = {
     document.getElementById('ytdBalance').textContent = '0,00€';
     document.getElementById('ytdInc').textContent = '0,00€';
     document.getElementById('ytdExp').textContent = '0,00€';
+    const avgEl = document.getElementById('ytdAvgExp');
+    if (avgEl) avgEl.textContent = '—';
     const ytdInvRow = document.getElementById('ytdInvRow');
     if (ytdInvRow) ytdInvRow.style.display = 'none';
 
@@ -804,8 +806,14 @@ const App = {
         // YTD balance = Ingresos − Gastos (invertido es solo informativo aquí)
         const bal = totalInc - totalExp;
 
+        // Gasto promedio: solo contar meses que tienen al menos un gasto
+        const monthsWithExp = new Set(expTx.map(t => t.date.slice(0, 7))).size;
+        const avgExp = monthsWithExp > 0 ? totalExp / monthsWithExp : 0;
+
         document.getElementById('ytdInc').textContent = formatEUR(totalInc);
         document.getElementById('ytdExp').textContent = formatEUR(totalExp);
+        const avgEl = document.getElementById('ytdAvgExp');
+        if (avgEl) avgEl.textContent = avgExp > 0 ? formatEUR(avgExp) : '—';
         const bEl = document.getElementById('ytdBalance');
         bEl.textContent = formatSignedEUR(bal);
         bEl.className = 'bh-val num-lg ' + (bal > 0 ? 'positive' : bal < 0 ? 'negative' : '');
