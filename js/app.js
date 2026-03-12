@@ -776,6 +776,11 @@ const App = {
     document.getElementById('ytdBalance').textContent = '0,00€';
     document.getElementById('ytdInc').textContent = '0,00€';
     document.getElementById('ytdExp').textContent = '0,00€';
+    // Limpiar gráfica mensual
+    const chartCanvas = document.getElementById('ytdMonthChart');
+    if (chartCanvas) { const c = chartCanvas.getContext('2d'); c.clearRect(0, 0, chartCanvas.width, chartCanvas.height); }
+    const chartLabels = document.getElementById('ytdMonthLabels');
+    if (chartLabels) chartLabels.innerHTML = '';
     const avgEl = document.getElementById('ytdAvgExp');
     if (avgEl) avgEl.textContent = '—';
     const ytdInvRow = document.getElementById('ytdInvRow');
@@ -823,6 +828,18 @@ const App = {
         if (ytdInvRow) ytdInvRow.style.display = totalInv > 0 ? '' : 'none';
         const ytdInvEl = document.getElementById('ytdInv');
         if (ytdInvEl) ytdInvEl.textContent = formatEUR(totalInv);
+
+        // ── Gráfica mensual ──────────────────────────────────────────────
+        // Construir datos por mes: inc, exp, bal
+        const monthData = results.map((items, i) => {
+          const mItems = items || [];
+          const mInc = mItems.filter(t => t.type === 'Ingreso' && !isReembolso(t)).reduce((s, t) => s + t.amount, 0);
+          const mExp = mItems.filter(t => t.type === 'Gasto').reduce((s, t) => s + t.amount, 0);
+          return { m: i, inc: mInc, exp: mExp, bal: mInc - mExp };
+        });
+        // currentMonth como índice dentro de monthData (0 = Enero)
+        const chartCurrentIdx = new Date().getFullYear() === year ? new Date().getMonth() : currentMonth;
+        UI.renderYTDMonthChart(monthData, chartCurrentIdx);
 
         // Group by category
         UI.renderYTDCategories(expTx, 'ytdExpCats', 'exp');

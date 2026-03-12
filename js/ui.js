@@ -645,5 +645,159 @@ const UI = {
     if (type === 'liquidez') return 'Liquidez';
     if (type === 'inversion') return 'Inversión';
     return type ? type.charAt(0).toUpperCase() + type.slice(1) : '—';
+  },
+
+  // ===== YTD MONTHLY CHART =====
+  renderYTDMonthChart(monthData, currentMonth) {
+    // monthData: array de { m (0-based), inc, exp, bal } para cada mes Jan–current
+    const canvas = document.getElementById('ytdMonthChart');
+    const labelsEl = document.getElementById('ytdMonthLabels');
+    if (!canvas || !labelsEl) return;
+
+    const DPR = window.devicePixelRatio || 1;
+    const parent = canvas.parentElement;
+    const W = parent.clientWidth || 340;
+    const H = 180;
+
+    canvas.width  = W * DPR;
+    canvas.height = H * DPR;
+    canvas.style.width  = W + 'px';
+    canvas.style.height = H + 'px';
+
+    const ctx = canvas.getContext('2d');
+    ctx.scale(DPR, DPR);
+
+    const C_INC  = '#B8E6D1';
+    const C_EXP  = '#F3B4C8';
+    const C_GRID = 'rgba(122,118,138,0.18)';
+    const C_ZERO = 'rgba(122,118,138,0.4)';
+
+    const PAD_L = 8, PAD_R = 8, PAD_T = 16, PAD_B = 28;
+    const chartW = W - PAD_L - PAD_R;
+    const chartH = H - PAD_T - PAD_B;
+    const n = monthData.length;
+    if (!n) return;
+
+    const maxVal = Math.max(...monthData.map(d => Math.max(d.inc, d.exp)), 1);
+
+    ctx.clearRect(0, 0, W, H);
+
+    // Grid lines
+    ctx.strokeStyle = C_GRID;
+    ctx.lineWidth = 1;
+    for (let i = 1; i <= 3; i++) {
+      const y = PAD_T + (chartH / 4) * i;
+      ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(W - PAD_R, y); ctx.stroke();
+    }
+
+    // Zero line
+    ctx.strokeStyle = C_ZERO;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(PAD_L, PAD_T + chartH);
+    ctx.lineTo(W - PAD_R, PAD_T + chartH);
+    ctx.stroke();
+
+    const colW = chartW / n;
+    const barW = Math.max(colW * 0.28, 3);
+    const gap  = barW * 0.4;
+    const BAL_SCALE = maxVal * 1.1 || 1;
+
+    const balPoints = [];
+
+    monthData.forEach((d, i) => {
+      const cx = PAD_L + (i + 0.5) * colW;
+
+      // Highlight current month column
+      if (i === currentMonth) {
+        ctx.fillStyle = 'rgba(217,211,245,0.07)';
+        ctx.fillRect(PAD_L + i * colW, PAD_T, colW, chartH);
+      }
+
+      // Income bar (left)
+      const incH = Math.max((d.inc / BAL_SCALE) * chartH, d.inc > 0 ? 2 : 0);
+      ctx.fillStyle = C_INC;
+      ctx.globalAlpha = i === currentMonth ? 1 : 0.65;
+      this._roundRect(ctx, cx - gap / 2 - barW, PAD_T + chartH - incH, barW, incH, 3);
+      ctx.fill();
+
+      // Expense bar (right)
+      const expH = Math.max((d.exp / BAL_SCALE) * chartH, d.exp > 0 ? 2 : 0);
+      ctx.fillStyle = C_EXP;
+      ctx.globalAlpha = i === currentMonth ? 1 : 0.65;
+      this._roundRect(ctx, cx + gap / 2, PAD_T + chartH - expH, barW, expH, 3);
+      ctx.fill();
+
+      ctx.globalAlpha = 1;
+
+      // Balance point
+      const absB = Math.abs(d.bal);
+      const bY = PAD_T + chartH - Math.max((absB / BAL_SCALE) * chartH, 0);
+      balPoints.push({ x: cx, y: bY, bal: d.bal });
+    });
+
+    // Balance dashed line
+    if (balPoints.length > 1) {
+      ctx.beginPath();
+      ctx.lineWidth = 1.5;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(217,211,245,0.45)';
+      ctx.setLineDash([4, 4]);
+      balPoints.forEach((p, i) => {
+        i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y);
+      });
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Dots
+      balPoints.forEach(p => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = p.bal >= 0 ? C_INC : C_EXP;
+        ctx.globalAlpha = 0.9;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      });
+    }
+
+    // Month labels below
+    const M_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    labelsEl.innerHTML = '';
+    labelsEl.style.cssText = 'display:flex;justify-content:space-around;padding:0 8px';
+    monthData.forEach((d, i) => {
+      const span = document.createElement('span');
+      span.textContent = M_SHORT[d.m];
+      span.style.cssText = `flex:1;text-align:center;font-size:.58rem;font-family:inherit;` +
+        `color:${i === currentMonth ? 'var(--md-primary)' : 'var(--md-outline)'};` +
+        `font-weight:${i === currentMonth ? '600' : '400'};letter-spacing:.3px`;
+      labelsEl.appendChild(span);
+    });
+
+    // Touch/click → snackbar tooltip
+    const _tooltip = (clientX) => {
+      const rect = canvas.getBoundingClientRect();
+      const relX = clientX - rect.left;
+      const idx = Math.min(Math.max(Math.floor(relX / (W / n)), 0), n - 1);
+      const d = monthData[idx];
+      UI.snack(`${M_SHORT[d.m]}: +${formatEUR(d.inc)} / −${formatEUR(d.exp)} = ${formatSignedEUR(d.bal)}`);
+    };
+    canvas.onclick     = e => _tooltip(e.clientX);
+    canvas.ontouchend  = e => { e.preventDefault(); _tooltip(e.changedTouches[0].clientX); };
+  },
+
+  _roundRect(ctx, x, y, w, h, r) {
+    if (h <= 0) return;
+    r = Math.min(r, h / 2, w / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h);
+    ctx.lineTo(x, y + h);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
   }
 };
+
