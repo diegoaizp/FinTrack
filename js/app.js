@@ -62,7 +62,6 @@ const App = {
     // Mostrar skeletons inmediatamente — sin overlay bloqueante
     UI.showSkeleton('txList');
     UI.showHeroSkeleton();
-    UI.showStatusSkeleton();
     UI.showInvHeroSkeleton();
 
     try {
@@ -84,7 +83,7 @@ const App = {
       UI.renderInvestments();
       UI.hideInvHeroSkeleton();
 
-      await this.loadStatusData({ showGlobal: false, reloadAccounts: true }).catch(() => {});
+      // Status cargado ahora en status.html
       UI.snack('Datos actualizados');
     } catch (e) {
       UI.hideHeroSkeleton();
@@ -127,7 +126,7 @@ const App = {
     document.querySelectorAll('.bnav-item').forEach(n =>
       n.classList.toggle('active', n.dataset.t === t)
     );
-    ['form', 'history', 'status', 'subs', 'invest', 'ytd'].forEach(s =>
+    ['form', 'history', 'subs', 'invest', 'ytd'].forEach(s =>
       document.getElementById('sec-' + s)?.classList.toggle('show', s === t)
     );
     // Show/hide floating register button
@@ -149,7 +148,6 @@ const App = {
       // Pre-carga los 5 meses anteriores en background para rellenar las barras
       this._preloadInvHistory();
     }
-    if (t === 'status') this.loadStatusData({ showGlobal: true });
   },
 
   // ===== TYPE =====

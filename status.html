@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1C1126">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>FinTrack — Status Dashboard</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@100..900&family=Google+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/status-dashboard.css">
+</head>
+<body>
+<div class="sd-page">
+
+  <!-- TOP BAR -->
+  <header class="sd-topbar" id="sdTopbar">
+    <a href="index.html" class="icon-btn" title="Volver"><span class="msr">arrow_back</span></a>
+    <span class="sd-topbar-title">Status Dashboard</span>
+    <button class="icon-btn" onclick="StatusDash.loadData({showSkeleton:true,reloadAccounts:true})" title="Sincronizar"><span class="msr">sync</span></button>
+  </header>
+
+  <!-- CONTENT -->
+  <div class="sd-content">
+
+    <!-- Month Navigation -->
+    <div class="month-pill">
+      <button class="month-arrow" onclick="StatusDash.changeMonth(-1)"><span class="msr">chevron_left</span></button>
+      <span class="month-text" id="sdMonthLabel">Marzo 2026</span>
+      <button class="month-arrow" onclick="StatusDash.changeMonth(1)"><span class="msr">chevron_right</span></button>
+    </div>
+
+    <!-- HERO -->
+    <div class="sd-hero" id="sdHero">
+      <div class="sd-hero-label">Patrimonio total</div>
+      <div class="sd-hero-val num-lg" id="sdHeroTotal">0,00€</div>
+      <div class="sd-hero-breakdown">
+        <div class="sd-hero-item">
+          <span class="msr" style="color:var(--inc)">water_drop</span>
+          <span class="sd-hero-amount num" id="sdHeroLiquidity">0,00€</span>
+          <span class="sd-hero-tag">Liquidez</span>
+        </div>
+        <div class="sd-hero-item">
+          <span class="msr" style="color:#8BBFE8">account_balance_wallet</span>
+          <span class="sd-hero-amount num" id="sdHeroInvestment">0,00€</span>
+          <span class="sd-hero-tag">Inversión</span>
+        </div>
+      </div>
+      <div class="sd-hero-date" id="sdHeroDate">Último status: —</div>
+    </div>
+
+    <!-- EVOLUTION CHART -->
+    <div class="sd-chart-section">
+      <div class="sd-section-title"><span class="msr">show_chart</span> Evolución patrimonial</div>
+      <div class="sd-chart-wrap">
+        <canvas id="sdChart"></canvas>
+        <div class="sd-chart-labels" id="sdChartLabels"></div>
+        <div class="sd-chart-legend">
+          <div class="sd-legend-item"><div class="sd-legend-dot" style="background:rgba(217,211,245,0.8)"></div>Patrimonio</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CREATE BUTTON -->
+    <button class="sd-create-btn" id="sdCreateBtn" onclick="StatusDash.openAdd()">
+      <span class="msr">add</span> Crear nuevo informe
+    </button>
+
+    <!-- ACCOUNT CARDS -->
+    <div class="sd-cards-section">
+      <div class="sd-section-title"><span class="msr">account_balance</span> Cuentas</div>
+      <div class="sd-cards-grid" id="sdCardsGrid">
+        <div class="sd-empty"><span class="msr">database</span><p>Cargando datos...</p></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ADD MODAL -->
+<div class="modal-overlay" id="sdAddModal" onclick="if(event.target===this)StatusDash.closeAdd()">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <span class="modal-title">Crear nuevo informe mensual</span>
+      <button class="icon-btn" onclick="StatusDash.closeAdd()"><span class="msr">close</span></button>
+    </div>
+    <div class="field-group">
+      <span class="field-label">Fecha del status</span>
+      <input class="m3-input" type="date" id="sdAddDate">
+    </div>
+    <div id="sdFormRows"></div>
+    <button class="m3-btn" onclick="StatusDash.saveAdd()"><span class="msr">check</span> Guardar informe</button>
+  </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal-overlay" id="sdEditModal" onclick="if(event.target===this)StatusDash.closeEdit()">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <span class="modal-title">Editar status</span>
+      <button class="icon-btn" onclick="StatusDash.closeEdit()"><span class="msr">close</span></button>
+    </div>
+    <div class="field-group">
+      <span class="field-label">Importe</span>
+      <input class="m3-input" type="text" id="sdEditAmount" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*">
+    </div>
+    <div class="field-group">
+      <span class="field-label">Fecha del status</span>
+      <input class="m3-input" type="date" id="sdEditDate">
+    </div>
+    <input type="hidden" id="sdEditId">
+    <button class="m3-btn" onclick="StatusDash.saveEdit()"><span class="msr">check</span> Guardar cambios</button>
+  </div>
+</div>
+
+<!-- PROGRESS BAR -->
+<div class="top-progress" id="sdProgress">
+  <div class="top-progress-bar"></div>
+</div>
+
+<!-- SNACKBAR -->
+<div class="snackbar" id="sdSnackbar"></div>
+
+<!-- Supabase client -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Shared modules -->
+<script src="js/state.js"></script>
+<script src="js/api.js"></script>
+<!-- Dashboard controller -->
+<script src="js/status-dashboard.js"></script>
+</body>
+</html>

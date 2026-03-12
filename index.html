@@ -21,6 +21,7 @@
   <header class="top-bar" id="topBar">
     <span class="top-bar-title">FinTrack</span>
     <div class="top-bar-actions">
+      <a href="status.html" class="icon-btn" title="Status Dashboard"><span class="msr">bid_landscape</span></a>
       <button class="icon-btn" onclick="App.toggleConfig()"><span class="msr">settings</span></button>
       <button class="icon-btn" onclick="App.loadAll()"><span class="msr">sync</span></button>
     </div>
@@ -40,7 +41,6 @@
       <button class="bnav-item active" data-t="form" onclick="App.goTab('form')"><span class="pill"></span><span class="msr">add_circle</span><span>Registrar</span></button>
       <button class="bnav-item" data-t="history" onclick="App.goTab('history')"><span class="pill"></span><span class="msr">receipt_long</span><span>Historial</span></button>
       <button class="bnav-item" data-t="subs" onclick="App.goTab('subs')"><span class="pill"></span><span class="msr">autorenew</span><span>Suscripciones</span></button>
-      <button class="bnav-item" data-t="status" onclick="App.goTab('status')"><span class="pill"></span><span class="msr">bid_landscape</span><span>Status</span></button>
     </div>
   </nav>
 
@@ -164,39 +164,6 @@
     </div>
   </section>
 
-  <!-- ========== STATUS ========== -->
-  <section class="section" id="sec-status">
-    <div class="month-pill">
-      <button class="month-arrow" onclick="App.changeStatusMonth(-1)"><span class="msr">chevron_left</span></button>
-      <span class="month-text" id="statusMonthLabel">Febrero 2026</span>
-      <button class="month-arrow" onclick="App.changeStatusMonth(1)"><span class="msr">chevron_right</span></button>
-    </div>
-    <div class="balance-hero">
-      <div class="bh-main">
-        <div class="bh-label">Total status del mes</div>
-        <div class="bh-val num-lg" id="statusTotal">0,00€</div>
-      </div>
-      <div class="bh-row">
-        <div class="bh-item">
-          <span class="msr" style="font-size:16px;color:var(--inc)">water_drop</span>
-          <span class="bh-amount num" id="statusLiquidity">0,00€</span>
-          <span class="bh-tag">Liquidez</span>
-        </div>
-        <div class="bh-item">
-          <span class="msr" style="font-size:16px;color:var(--inv)">account_balance_wallet</span>
-          <span class="bh-amount num" id="statusInvestment">0,00€</span>
-          <span class="bh-tag">Inversión</span>
-        </div>
-      </div>
-      <div class="bh-row" style="margin-top:8px">
-        <div class="bh-item"><span class="bh-tag" id="statusLastDate">Último status: —</span></div>
-      </div>
-    </div>
-    <button class="ytd-btn" id="statusAddBtn" onclick="App.openStatusAdd()"><span class="msr">add</span> Crear nuevo informe</button>
-    <div class="tx-list" id="statusList">
-      <div class="empty"><span class="msr">bid_landscape</span><p>Sin status para este mes.</p></div>
-    </div>
-  </section>
 
   <!-- ========== RECURRENTES ========== -->
   <section class="section" id="sec-subs">
@@ -375,41 +342,7 @@
   </div>
 </div>
 
-<!-- STATUS ADD MODAL -->
-<div class="modal-overlay" id="statusAddModal" onclick="if(event.target===this)App.closeStatusAdd()">
-  <div class="modal-sheet">
-    <div class="modal-header">
-      <span class="modal-title">Crear nuevo informe mensual</span>
-      <button class="icon-btn" onclick="App.closeStatusAdd()"><span class="msr">close</span></button>
-    </div>
-    <div class="field-group">
-      <span class="field-label">Fecha del status</span>
-      <input class="m3-input" type="date" id="statusAddDate">
-    </div>
-    <div id="statusFormRows"></div>
-    <button class="m3-btn" onclick="App.saveStatusAdd()"><span class="msr">check</span> Guardar informe</button>
-  </div>
-</div>
 
-<!-- STATUS EDIT MODAL -->
-<div class="modal-overlay" id="statusEditModal" onclick="if(event.target===this)App.closeEditStatus()">
-  <div class="modal-sheet">
-    <div class="modal-header">
-      <span class="modal-title">Editar status</span>
-      <button class="icon-btn" onclick="App.closeEditStatus()"><span class="msr">close</span></button>
-    </div>
-    <div class="field-group">
-      <span class="field-label">Importe</span>
-      <input class="m3-input" type="text" id="statusEditAmount" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*">
-    </div>
-    <div class="field-group">
-      <span class="field-label">Fecha del status</span>
-      <input class="m3-input" type="date" id="statusEditDate">
-    </div>
-    <input type="hidden" id="statusEditId">
-    <button class="m3-btn" onclick="App.saveEditStatus()"><span class="msr">check</span> Guardar cambios</button>
-  </div>
-</div>
 
 <!-- FLOATING REGISTER BUTTON -->
 <button class="floating-cta" id="floatingRegister" onclick="App.submitEntry()">
