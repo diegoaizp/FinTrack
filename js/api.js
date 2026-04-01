@@ -39,9 +39,18 @@ const API = {
 
   // ===== READ =====
 
+  // Carga un mes y lo cachea. Si setTx=true (por defecto), actualiza FT.tx.
+  // Usar fetchMonth() si solo quieres los datos sin side-effects.
   async loadMonth(year, month, force = false) {
+    const items = await this.fetchMonth(year, month, force);
+    FT.tx = items;
+    return items;
+  },
+
+  // Fetch sin sobrescribir FT.tx — seguro para cargas en background
+  async fetchMonth(year, month, force = false) {
     const cached = force ? null : Cache.get(year, month);
-    if (cached) { FT.tx = cached; return cached; }
+    if (cached) return cached;
 
     const m     = month + 1; // la app usa mes 0-based
     const start = `${year}-${String(m).padStart(2, '0')}-01`;
@@ -76,7 +85,6 @@ const API = {
     }));
 
     Cache.set(year, month, items);
-    FT.tx = items;
     return items;
   },
 

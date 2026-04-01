@@ -1,7 +1,6 @@
 // ===== FinTrack App Controller =====
 
 const App = {
-  _statusSeq: 0,
   _reimbCandidates: [],
 
   // Para operaciones de escritura (guardar, borrar): barra top + toast compacto
@@ -20,11 +19,10 @@ const App = {
   // ===== INIT =====
   async init() {
     const url = API.getUrl();
-    if (url) document.getElementById('scriptUrl').value = url;
+    if (url) document.getElementById('sbKey').value = url;
     document.getElementById('inputDate').value = todayStr();
     UI.updateMonthLabel();
     UI.updateInvMonthLabel();
-    UI.updateStatusMonthLabel();
 
     // Restaurar filtro persistido
     const savedFilter = localStorage.getItem('ft_filter');
@@ -113,7 +111,7 @@ const App = {
   },
 
   saveConfig() {
-    const url = document.getElementById('scriptUrl').value.trim();
+    const url = document.getElementById('sbKey').value.trim();
     if (!url) { UI.snack('Introduce una URL'); return; }
     API.setUrl(url);
     UI.snack('Guardado');
@@ -126,7 +124,7 @@ const App = {
     document.querySelectorAll('.bnav-item').forEach(n =>
       n.classList.toggle('active', n.dataset.t === t)
     );
-    ['form', 'history', 'subs', 'invest', 'ytd'].forEach(s =>
+    ['form', 'history', 'subs', 'invest', 'ytd', 'predict'].forEach(s =>
       document.getElementById('sec-' + s)?.classList.toggle('show', s === t)
     );
     // Show/hide floating register button
@@ -134,7 +132,7 @@ const App = {
     if (registerBtn) registerBtn.style.display = t === 'form' ? 'flex' : 'none';
     // Show/hide bottom nav (hide on YTD page)
     const bnav = document.querySelector('.bottom-nav');
-    if (bnav) bnav.style.display = t === 'ytd' ? 'none' : '';
+    if (bnav) bnav.style.display = (t === 'ytd' || t === 'predict') ? 'none' : '';
 
     if (t === 'form') setTimeout(() => document.getElementById('inputAmount').focus(), 150);
     if (t === 'subs') {
@@ -264,7 +262,7 @@ const App = {
       for (let i = 0; i < 6; i++) {
         const d = new Date(pivot.getFullYear(), pivot.getMonth() - i, 1);
         jobs.push(
-          API.loadMonth(d.getFullYear(), d.getMonth(), true)
+          API.fetchMonth(d.getFullYear(), d.getMonth(), true)
             .then(items => (items || []).filter(x => x.status === 'activo' && x.type === 'Gasto' && x.amount > 0))
         );
       }
@@ -310,7 +308,7 @@ const App = {
     for (let i = 0; i < 6; i++) {
       const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
       try {
-        const items = await API.loadMonth(d.getFullYear(), d.getMonth(), true);
+        const items = await API.fetchMonth(d.getFullYear(), d.getMonth(), true);
         const found = (items || []).find(x => x.id === expenseId && x.status === 'activo' && x.type === 'Gasto');
         if (found) return found;
       } catch (e) {}
@@ -370,7 +368,7 @@ const App = {
     const desc = document.getElementById('inputDesc').value.trim();
     const date = document.getElementById('inputDate').value;
     const isRec = document.getElementById('isRec').checked;
-    const day = parseInt(document.getElementById('inputDay').value) || 1;
+    const day = Math.max(1, Math.min(31, parseInt(document.getElementById('inputDay').value) || 1));
     const isReimb = this._isBizumReembolso() && document.getElementById('isReimb').checked;
     const reimbId = isReimb ? document.getElementById('reimbExpense').value : '';
     const reimbTarget = isReimb ? this._reimbCandidates.find(x => x.id === reimbId) : null;
@@ -478,7 +476,12 @@ const App = {
     UI.updateInvMonthLabel();
     UI.showInvHeroSkeleton();
     try {
-      await API.loadMonth(FT.invYear, FT.invMonth);
+      // fetchMonth no sobrescribe FT.tx — seguro para meses distintos
+      if (FT.invYear !== FT.year || FT.invMonth !== FT.month) {
+        FT._invTx = await API.fetchMonth(FT.invYear, FT.invMonth);
+      } else {
+        FT._invTx = null;
+      }
       UI.renderInvestments();
       this._preloadInvHistory();
     } catch (e) {
@@ -496,151 +499,9 @@ const App = {
       let y = FT.invYear;
       if (m < 0) { m += 12; y--; }
       if (!Cache.get(y, m)) {
-        API.loadMonth(y, m, false).then(() => UI._renderInvBars()).catch(() => {});
+        // fetchMonth solo cachea, no toca FT.tx
+        API.fetchMonth(y, m, false).then(() => UI._renderInvBars()).catch(() => {});
       }
-    }
-  },
-
-  async changeStatusMonth(d) {
-    FT.statusMonth += d;
-    if (FT.statusMonth > 11) { FT.statusMonth = 0; FT.statusYear++; }
-    if (FT.statusMonth < 0) { FT.statusMonth = 11; FT.statusYear--; }
-    UI.updateStatusMonthLabel();
-    await this.loadStatusData({ showGlobal: true });
-  },
-
-  _isCurrentStatusMonth() {
-    const now = new Date();
-    return FT.statusYear === now.getFullYear() && FT.statusMonth === now.getMonth();
-  },
-
-  _latestEntryByAccount(entries) {
-    const by = {};
-    entries.forEach(e => {
-      const prev = by[e.accountId];
-      if (!prev) { by[e.accountId] = e; return; }
-      const prevDate = Date.parse(prev.statusDate || '');
-      const curDate = Date.parse(e.statusDate || '');
-      if (!Number.isNaN(curDate) && (Number.isNaN(prevDate) || curDate >= prevDate)) {
-        by[e.accountId] = e;
-      }
-    });
-    return by;
-  },
-
-  _buildTrend(accountId, monthSeries, perMonthLatest) {
-    let max = 0;
-    const vals = monthSeries.map(m => {
-      const e = perMonthLatest[`${m.y}-${m.m}`]?.[accountId];
-      const v = e ? Number(e.amount || 0) : 0;
-      max = Math.max(max, Math.abs(v));
-      return v;
-    });
-    const top = max || 1;
-    return vals.map(v => {
-      const h = Math.max(3, Math.round((Math.abs(v) / top) * 16));
-      const cls = v >= 0 ? 'up' : 'down';
-      return `<span class="status-bar ${cls}" style="height:${h}px"></span>`;
-    }).join('');
-  },
-
-  async loadStatusData(opts = {}) {
-    const showGlobal = !!opts.showGlobal;
-    const reloadAccounts = !!opts.reloadAccounts;
-    const url = API.getUrl();
-    if (!url) return;
-
-    const seq = ++this._statusSeq;
-    // Al navegar al tab o cambiar mes: mostrar skeleton (en loadAll ya se muestra antes)
-    if (showGlobal) UI.showStatusSkeleton();
-
-    try {
-      if (reloadAccounts || !FT.statusAccounts.length) {
-        await API.loadStatusAccounts();
-      }
-
-      const monthSeries = [];
-      for (let i = 5; i >= 0; i--) {
-        const d = new Date(FT.statusYear, FT.statusMonth - i, 1);
-        monthSeries.push({ y: d.getFullYear(), m: d.getMonth() });
-      }
-      const reqs = monthSeries.map(m => API.fetchStatusMonth(m.y, m.m));
-      const monthRows = await Promise.all(reqs);
-
-      const perMonthLatest = {};
-      monthSeries.forEach((m, idx) => {
-        perMonthLatest[`${m.y}-${m.m}`] = this._latestEntryByAccount(monthRows[idx]);
-      });
-      if (seq !== this._statusSeq) return;
-
-      const currentKey = `${FT.statusYear}-${FT.statusMonth}`;
-      const currentEntries = perMonthLatest[currentKey]
-        ? Object.values(perMonthLatest[currentKey])
-        : [];
-      FT.statusEntries = currentEntries;
-      const currentLatest = perMonthLatest[currentKey] || {};
-
-      const prevDate = new Date(FT.statusYear, FT.statusMonth - 1, 1);
-      const prevKey = `${prevDate.getFullYear()}-${prevDate.getMonth()}`;
-      const prevLatest = perMonthLatest[prevKey] || this._latestEntryByAccount(await API.fetchStatusMonth(prevDate.getFullYear(), prevDate.getMonth()));
-
-      const usedIds = {};
-      FT.statusAccounts.forEach(a => {
-        if (usedIds[a.id]) {
-          console.warn('Status account id duplicado:', a.id, a.name);
-        }
-        usedIds[a.id] = true;
-      });
-
-      const accountRows = FT.statusAccounts.map((a, idx) => ({
-        ...a,
-        _rowId: `${a.id}__${idx}`
-      }));
-
-      let total = 0;
-      let liquidityTotal = 0;
-      let investmentTotal = 0;
-      let lastDate = '';
-      const rows = accountRows.map(a => {
-        const curr = currentLatest[a.id] || null;
-        const prev = prevLatest[a.id] || null;
-        const amount = curr ? parseAmount(curr.amount) : 0;
-        total += amount;
-        const accType = normText(a.type);
-        if (accType === 'liquidez') liquidityTotal += amount;
-        if (accType === 'inversion') investmentTotal += amount;
-        if (curr && curr.statusDate && (!lastDate || curr.statusDate > lastDate)) lastDate = curr.statusDate;
-
-        const hasPrev = !!prev;
-        const prevAmount = hasPrev ? parseAmount(prev.amount) : 0;
-        const delta = hasPrev ? (amount - prevAmount) : 0;
-        const pct = hasPrev && prevAmount !== 0 ? ((delta / Math.abs(prevAmount)) * 100) : null;
-        return {
-          id: a._rowId,
-          latestId: curr ? curr.id : '',
-          name: a.name,
-          icon: a.icon,
-          typeLabel: UI.statusTypeLabel(a.type),
-          amount,
-          delta,
-          deltaNA: !hasPrev,
-          deltaPct: pct === null ? 'N/A' : pct.toFixed(1),
-          trendHtml: this._buildTrend(a.id, monthSeries, perMonthLatest)
-        };
-      });
-
-      if (seq !== this._statusSeq) return;
-      UI.renderStatus({
-        total,
-        liquidityTotal,
-        investmentTotal,
-        lastDate,
-        canCreate: this._isCurrentStatusMonth(),
-        rows
-      });
-    } catch (e) {
-      const list = document.getElementById('statusList');
-      if (list) list.innerHTML = `<div class="empty"><span class="msr">warning</span><p>${e.message || 'Error al cargar status.'}</p></div>`;
     }
   },
 
@@ -794,7 +655,7 @@ const App = {
         const currentMonth = new Date().getFullYear() === year ? new Date().getMonth() : 11;
         const promises = [];
         for (let m = 0; m <= currentMonth; m++) {
-          promises.push(API.loadMonth(year, m, true));
+          promises.push(API.fetchMonth(year, m, true));
         }
         const results = await Promise.all(promises);
         results.forEach(items => allTx.push(...(items || [])));
@@ -850,6 +711,91 @@ const App = {
   },
 
   closeYTD() {
+    this.goTab('history');
+  },
+
+  // ===== PREDICTION =====
+  async openPredict() {
+    this.goTab('predict');
+    document.getElementById('predExpTotal').textContent = '0,00€';
+    document.getElementById('predIncTotal').textContent = '0,00€';
+    document.getElementById('predMeta').textContent = '';
+    document.getElementById('predExpList').innerHTML = '';
+    document.getElementById('predIncList').innerHTML = '';
+    document.getElementById('predLoading').style.display = '';
+
+    await this._withLoading('Cargando predicción...', async () => {
+      try {
+        if (!API.getUrl()) { UI.snack('Configura la URL primero'); return; }
+
+        // Fetch ALL historical expenses & income in a single query
+        const { data, error } = await _initSb()
+          .from('movimientos')
+          .select('fecha, tipo, categoria, importe, ambito')
+          .in('tipo', ['Gasto', 'Ingreso'])
+          .eq('estado', 'activo');
+        sbCheck(error, 'predict');
+
+        const all = (data || []).map(r => ({
+          date:     r.fecha,
+          type:     r.tipo,
+          category: r.categoria,
+          amount:   parseAmount(r.importe),
+          scope:    r.ambito
+        }));
+
+        // Filter reembolsos out of income
+        const allExp = all.filter(t => t.type === 'Gasto');
+        const allInc = all.filter(t => t.type === 'Ingreso' && !isReembolso(t));
+
+        if (!allExp.length && !allInc.length) {
+          document.getElementById('predExpList').innerHTML =
+            '<div class="empty" style="padding:24px"><p>Sin movimientos registrados</p></div>';
+          document.getElementById('predLoading').style.display = 'none';
+          return;
+        }
+
+        // Count unique months across all history (using both types)
+        const allMonths = new Set(all.map(t => t.date.slice(0, 7)));
+        const monthCount = allMonths.size;
+
+        // Current month key
+        const now = new Date();
+        const curKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+        // Build category data for a given set of transactions
+        const buildCats = (txList) => {
+          const cats = {};
+          txList.forEach(tx => {
+            if (!cats[tx.category]) cats[tx.category] = { total: 0, curMonth: 0 };
+            cats[tx.category].total += tx.amount;
+            if (tx.date.startsWith(curKey)) cats[tx.category].curMonth += tx.amount;
+          });
+          return Object.entries(cats)
+            .map(([name, d]) => ({ name, avg: d.total / monthCount, curMonth: d.curMonth }))
+            .sort((a, b) => b.avg - a.avg);
+        };
+
+        const expSorted = buildCats(allExp);
+        const incSorted = buildCats(allInc);
+        const totalExpAvg = expSorted.reduce((s, c) => s + c.avg, 0);
+        const totalIncAvg = incSorted.reduce((s, c) => s + c.avg, 0);
+
+        document.getElementById('predExpTotal').textContent = formatEUR(totalExpAvg);
+        document.getElementById('predIncTotal').textContent = formatEUR(totalIncAvg);
+        document.getElementById('predMeta').textContent =
+          `Basado en ${monthCount} mes${monthCount !== 1 ? 'es' : ''} de historial`;
+
+        UI.renderPrediction(expSorted, totalExpAvg, 'predExpList', 'exp');
+        UI.renderPrediction(incSorted, totalIncAvg, 'predIncList', 'inc');
+      } catch (e) {
+        UI.snack('Error al cargar predicción');
+      }
+    });
+    document.getElementById('predLoading').style.display = 'none';
+  },
+
+  closePredict() {
     this.goTab('history');
   },
 
@@ -1025,77 +971,6 @@ const App = {
     });
   },
 
-  // ===== STATUS =====
-  openStatusAdd() {
-    if (!this._isCurrentStatusMonth()) {
-      UI.snack('Solo puedes crear status en el mes actual');
-      return;
-    }
-    UI.renderStatusForm(FT.statusAccounts);
-    document.getElementById('statusAddDate').value = todayStr();
-    document.getElementById('statusAddModal').classList.add('show');
-  },
-
-  closeStatusAdd() {
-    document.getElementById('statusAddModal').classList.remove('show');
-  },
-
-  async saveStatusAdd() {
-    const date = document.getElementById('statusAddDate').value || todayStr();
-    const fields = Array.from(document.querySelectorAll('[data-status-account]'));
-    const items = fields.map(f => ({
-      accountId: f.dataset.statusAccount,
-      amount: parseAmount(f.value || 0)
-    }));
-
-    await this._withLoading('Guardando status...', async () => {
-      try {
-        await Promise.all(items.map(item => API.addStatusEntry({
-          status_id: genId('s'),
-          year: FT.statusYear,
-          month: FT.statusMonth + 1,
-          cuenta_id: item.accountId,
-          saldo: item.amount,
-          fecha_status: date,
-          estado: 'activo'
-        })));
-        this.closeStatusAdd();
-        await this.loadStatusData({ showGlobal: false });
-        UI.snack('Status guardado');
-      } catch (e) {
-        UI.snack('Error al guardar status');
-      }
-    });
-  },
-
-  openEditStatus(id) {
-    const e = FT.statusEntries.find(x => x.id === id);
-    if (!e) return;
-    document.getElementById('statusEditId').value = e.id;
-    document.getElementById('statusEditAmount').value = e.amount;
-    document.getElementById('statusEditDate').value = e.statusDate || todayStr();
-    document.getElementById('statusEditModal').classList.add('show');
-  },
-
-  closeEditStatus() {
-    document.getElementById('statusEditModal').classList.remove('show');
-  },
-
-  async saveEditStatus() {
-    const id = document.getElementById('statusEditId').value;
-    const amount = parseAmount(document.getElementById('statusEditAmount').value || 0);
-    const date = document.getElementById('statusEditDate').value || todayStr();
-    await this._withLoading('Actualizando status...', async () => {
-      try {
-        await API.updateStatusEntry(id, { saldo: amount, fecha_status: date });
-        this.closeEditStatus();
-        await this.loadStatusData({ showGlobal: false });
-        UI.snack('Status actualizado');
-      } catch (e) {
-        UI.snack('Error al actualizar status');
-      }
-    });
-  }
 };
 
 // ===== BOOT =====

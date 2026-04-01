@@ -372,6 +372,28 @@ body.app-loading .app-shell{filter:blur(4px);pointer-events:none;user-select:non
 .status-bar.up{background:var(--inc)}
 .status-bar.down{background:var(--exp)}
 .ytd-loading{text-align:center;padding:32px;color:var(--md-on-surface-var);font-size:.88rem}
+/* HISTORIAL BUTTON ROW */
+.hist-btn-row{display:flex;gap:8px;margin-bottom:16px}
+.hist-btn-row .ytd-btn{flex:1;margin-bottom:0}
+/* PREDICTION */
+.pred-hero{background:linear-gradient(135deg,var(--md-surface-ch) 0%,var(--md-primary-c) 100%);border-radius:var(--r-xl);padding:24px 20px 20px;margin-bottom:20px;text-align:center}
+.pred-hero-row{display:flex;justify-content:center;gap:0}
+.pred-hero-block{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px}
+.pred-hero-divider{width:1px;background:rgba(255,255,255,.12);margin:4px 0}
+.pred-hero .bh-label{color:var(--md-on-primary-c);opacity:.85;font-size:.68rem;letter-spacing:.3px;text-transform:uppercase}
+.pred-hero .bh-val{color:var(--md-on-primary-c);font-size:1.3rem}
+.pred-exp-val{color:var(--exp) !important}
+.pred-inc-val{color:var(--inc) !important}
+.pred-meta{font-size:.72rem;color:var(--md-on-primary-c);opacity:.6;margin-top:12px}
+.pred-section-title{display:flex;align-items:center;gap:6px;font-size:.82rem;font-weight:600;color:var(--md-on-surface-var);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+.pred-card .yc-info{min-width:0}
+.pred-pct{font-size:.65rem;color:var(--md-outline);font-weight:400;margin-left:4px}
+.pred-bar-wrap{position:relative;height:5px;border-radius:3px;margin-top:6px;overflow:hidden}
+.pred-bar-bg{position:absolute;inset:0;background:var(--md-outline-var);border-radius:3px}
+.pred-bar-fill{position:absolute;top:0;left:0;height:100%;border-radius:3px;transition:width .5s cubic-bezier(.2,0,0,1)}
+.pred-bar-fill.pred-over{box-shadow:0 0 6px rgba(243,180,200,.4)}
+.pred-avg-col{display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0;gap:1px;min-width:72px}
+.pred-avg-val{font-size:.92rem;font-weight:500;white-space:nowrap}
 /* Global loader — solo para operaciones de escritura (guardar/borrar) */
 .global-loader{position:fixed;inset:0;display:none;align-items:flex-end;justify-content:center;z-index:1000;padding-bottom:100px;pointer-events:none}
 .global-loader.show{display:flex}

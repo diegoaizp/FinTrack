@@ -55,11 +55,6 @@ const UI = {
     el.textContent = MONTHS[FT.invMonth] + ' ' + FT.invYear;
   },
 
-  updateStatusMonthLabel() {
-    const el = document.getElementById('statusMonthLabel');
-    if (!el) return;
-    el.textContent = MONTHS[FT.statusMonth] + ' ' + FT.statusYear;
-  },
 
   // ===== CATEGORIES =====
   renderCats() {
@@ -110,9 +105,9 @@ const UI = {
     const filtered = FT.tx.filter(tx => {
       const d = new Date(tx.date);
       if (d.getMonth() !== FT.month || d.getFullYear() !== FT.year) return false;
-      if (tx.type === 'Inversión') return false;
       if (FT.filter === 'all') return true;
       if (FT.filter === 'Común') return tx.scope === 'Común';
+      if (FT.filter === 'Inversión') return tx.type === 'Inversión';
       return tx.type === FT.filter;
     }).sort((a, b) => {
       const byDate = new Date(b.date) - new Date(a.date);
@@ -150,7 +145,7 @@ const UI = {
       const wday = WEEKDAYS[d.getDay()];
       const dayTotal = txs.reduce((s, t) => {
         if (isReembolso(t)) return s;
-        return s + (t.type === 'Gasto' ? -t.amount : t.amount);
+        return s + (t.type === 'Gasto' || t.type === 'Inversión' ? -t.amount : t.amount);
       }, 0);
       const sign = dayTotal >= 0 ? '+' : '−';
 
@@ -180,12 +175,12 @@ const UI = {
   },
 
   _txCard(tx) {
-    const isE = tx.type === 'Gasto', isI = tx.type === 'Ingreso';
+    const isE = tx.type === 'Gasto', isI = tx.type === 'Ingreso', isInv = tx.type === 'Inversión';
     const cls = isE ? 'expense' : isI ? 'income' : 'inversion';
     const ic = catIcon(tx.category);
     const sub = tx.subcategory ? ' / ' + tx.subcategory : '';
     const isComp = isCompensatingBizum(tx);
-    const sign = isComp ? '↔' : (isE ? '−' : '+');
+    const sign = isComp ? '↔' : (isE || isInv ? '−' : '+');
     const desc = tx.description || tx.category || 'Sin descripción';
     const descCls = tx.description ? 'tx-t' : 'tx-t no-desc';
 
@@ -204,8 +199,8 @@ const UI = {
       <div class="tx-body"><div class="${descCls}">${desc}</div><div class="tx-m">${tx.category}${sub} ${recBadge}${comBadge}${compBadge}</div></div>
       <div class="tx-v num ${cls}">${sign}${formatEUR(tx.amount)}</div>
       <div class="tx-actions">
-        <button class="tx-act" onclick="App.openEdit('${tx.id}')" title="Editar"><span class="msr">edit</span></button>
-        <button class="tx-act" onclick="App.deleteEntry('${tx.id}')" title="Eliminar"><span class="msr">delete</span></button>
+        <button class="tx-act" onclick="App.openEdit('${esc(tx.id)}')" title="Editar"><span class="msr">edit</span></button>
+        <button class="tx-act" onclick="App.deleteEntry('${esc(tx.id)}')" title="Eliminar"><span class="msr">delete</span></button>
       </div>
     </div>`;
   },
@@ -294,7 +289,7 @@ const UI = {
         ? `<div class="paid-badge"><span class="msr">check_circle</span>Cobrado</div>`
         : '';
       const cobroBtn = isActive
-        ? `<button class="sc-cobro-btn" ${paid ? 'disabled title="Ya cobrado este mes"' : 'title="Registrar cobro"'} onclick="App.openCobro('${s.id}')"><span class="msr">add</span></button>`
+        ? `<button class="sc-cobro-btn" ${paid ? 'disabled title="Ya cobrado este mes"' : 'title="Registrar cobro"'} onclick="App.openCobro('${esc(s.id)}')"><span class="msr">add</span></button>`
         : '';
 
       return `<div class="sub-card ${isActive ? '' : 'off'}">
@@ -309,9 +304,9 @@ const UI = {
           <span class="sc-price num">${formatEUR(s.amount)}</span>
           <div class="sc-actions">
             ${cobroBtn}
-            <button class="tx-act" onclick="App.openEditTemplate('${s.id}')" title="Editar"><span class="msr">edit</span></button>
-            <button class="tx-act" onclick="App.deleteTemplate('${s.id}')" title="Eliminar"><span class="msr">delete</span></button>
-            <label class="m3-sw"><input type="checkbox" ${isActive ? 'checked' : ''} onchange="App.toggleTemplate('${s.id}')"><span class="track"></span></label>
+            <button class="tx-act" onclick="App.openEditTemplate('${esc(s.id)}')" title="Editar"><span class="msr">edit</span></button>
+            <button class="tx-act" onclick="App.deleteTemplate('${esc(s.id)}')" title="Eliminar"><span class="msr">delete</span></button>
+            <label class="m3-sw"><input type="checkbox" ${isActive ? 'checked' : ''} onchange="App.toggleTemplate('${esc(s.id)}')"><span class="track"></span></label>
           </div>
         </div>
       </div>`;
@@ -363,7 +358,9 @@ const UI = {
     const list = document.getElementById('invList');
     if (!totalEl || !countEl || !list) return;
 
-    const items = FT.tx.filter(tx => {
+    // Usar datos separados si el mes de inversión ≠ mes del historial
+    const source = FT._invTx || FT.tx;
+    const items = source.filter(tx => {
       const d = new Date(tx.date);
       return tx.type === 'Inversión' && d.getMonth() === FT.invMonth && d.getFullYear() === FT.invYear;
     }).sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -389,8 +386,8 @@ const UI = {
         <div class="tx-body"><div class="${descCls}">${desc}</div><div class="tx-m">${tx.category}${sub} · ${ds}</div></div>
         <div class="tx-v num inversion">${formatEUR(tx.amount)}</div>
         <div class="tx-actions">
-          <button class="tx-act" onclick="App.openEdit('${tx.id}')" title="Editar"><span class="msr">edit</span></button>
-          <button class="tx-act" onclick="App.deleteEntry('${tx.id}')" title="Eliminar"><span class="msr">delete</span></button>
+          <button class="tx-act" onclick="App.openEdit('${esc(tx.id)}')" title="Editar"><span class="msr">edit</span></button>
+          <button class="tx-act" onclick="App.deleteEntry('${esc(tx.id)}')" title="Eliminar"><span class="msr">delete</span></button>
         </div>
       </div>`;
     }).join('');
@@ -411,11 +408,11 @@ const UI = {
       if (m < 0) { m += 12; y--; }
 
       const isCurrent = (m === FT.invMonth && y === FT.invYear);
-      // Mes actual: usar FT.tx directamente (siempre fresco)
+      // Mes actual de inversión: usar fuente apropiada
       // Meses pasados: leer de caché (puede ser null si no se ha cargado aún)
       let items;
       if (isCurrent) {
-        items = FT.tx;
+        items = FT._invTx || FT.tx;
       } else {
         items = Cache.get(y, m) || [];
       }
@@ -532,6 +529,53 @@ const UI = {
     }).join('');
   },
 
+  // ===== PREDICTION =====
+  _PRED_COLORS: [
+    '#D9D3F5','#F3B4C8','#AFC8FF','#B8E6D1','#FFD6A5',
+    '#FFC6FF','#A8DADC','#FDFFB6','#FFADAD','#C9CBA3',
+    '#BDE0FE','#E8C4B8','#9BF6FF','#D4A5A5','#CAFFBF'
+  ],
+
+  renderPrediction(sorted, totalAvg, containerId, type) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    if (!sorted.length) {
+      container.innerHTML = '<div class="empty" style="padding:24px"><p>Sin datos</p></div>';
+      return;
+    }
+
+    const colors = this._PRED_COLORS;
+    const barColor = type === 'exp' ? 'var(--exp)' : 'var(--inc)';
+
+    container.innerHTML = sorted.map((cat, i) => {
+      const pct = totalAvg > 0 ? Math.round((cat.avg / totalAvg) * 100) : 0;
+      const ic = catIcon(cat.name);
+      const color = colors[i % colors.length];
+      // Progress bar: how much of the predicted avg has been spent/earned this month
+      const progress = cat.avg > 0 ? Math.min(Math.round((cat.curMonth / cat.avg) * 100), 100) : 0;
+      const over = cat.curMonth > cat.avg;
+      const progressCls = over ? 'pred-over' : '';
+      const statusLabel = type === 'exp'
+        ? `${formatEUR(cat.curMonth)} de ${formatEUR(cat.avg)} estimado`
+        : `${formatEUR(cat.curMonth)} de ${formatEUR(cat.avg)} estimado`;
+      return `<div class="ytd-cat-card pred-card">
+        <div class="yc-icon" style="background:${color}1A"><span class="msr" style="color:${color};font-variation-settings:'FILL' 1,'wght' 500">${ic}</span></div>
+        <div class="yc-info">
+          <div class="yc-name">${cat.name} <span class="pred-pct">${pct}%</span></div>
+          <div class="pred-bar-wrap">
+            <div class="pred-bar-bg"></div>
+            <div class="pred-bar-fill ${progressCls}" style="width:${progress}%;background:${color}"></div>
+          </div>
+          <div class="yc-count">${statusLabel}</div>
+        </div>
+        <div class="pred-avg-col">
+          <div class="num pred-avg-val" style="color:${color}">${formatEUR(cat.avg)}</div>
+          <div class="yc-count">/mes</div>
+        </div>
+      </div>`;
+    }).join('');
+  },
+
   // ===== SKELETON =====
 
   // Genera una tarjeta skeleton realista (imita una tx-card)
@@ -563,19 +607,6 @@ const UI = {
   },
 
   // Skeleton de la sección de status (tarjetas de cuentas)
-  showStatusSkeleton() {
-    const skCard = `<div class="sk-status-card">
-      <div class="sk-status-icon shimmer"></div>
-      <div class="sk-body">
-        <div class="sk-line shimmer" style="width:50%"></div>
-        <div class="sk-line short shimmer" style="width:30%"></div>
-      </div>
-      <div class="sk-status-val shimmer"></div>
-    </div>`;
-    const list = document.getElementById('statusList');
-    if (list) list.innerHTML = skCard + skCard + skCard;
-  },
-
   // Skeleton del hero de inversiones
   showInvHeroSkeleton() {
     document.getElementById('invTotal')?.closest('.inv-hero')?.classList.add('sk-loading');
@@ -590,62 +621,7 @@ const UI = {
       `<div class="empty"><span class="msr">warning</span><p>${msg}</p></div>`;
   },
 
-  renderStatus(vm) {
-    const totalEl = document.getElementById('statusTotal');
-    const liqEl = document.getElementById('statusLiquidity');
-    const invEl = document.getElementById('statusInvestment');
-    const dateEl = document.getElementById('statusLastDate');
-    const listEl = document.getElementById('statusList');
-    const addBtn = document.getElementById('statusAddBtn');
-    if (!totalEl || !dateEl || !listEl || !addBtn) return;
-
-    totalEl.textContent = formatEUR(vm.total);
-    if (liqEl) liqEl.textContent = formatEUR(vm.liquidityTotal || 0);
-    if (invEl) invEl.textContent = formatEUR(vm.investmentTotal || 0);
-    dateEl.textContent = vm.lastDate ? `Último status: ${vm.lastDate}` : 'Último status: —';
-    addBtn.disabled = !vm.canCreate;
-
-    if (!vm.rows.length) {
-      listEl.innerHTML = '<div class="empty"><span class="msr">database</span><p>Sin cuentas activas.</p></div>';
-      return;
-    }
-
-    listEl.innerHTML = vm.rows.map(r => {
-      const deltaStr = r.deltaNA ? 'N/A' : `${r.delta >= 0 ? '+' : '−'}${formatEUR(Math.abs(r.delta))} (${r.deltaPct}%)`;
-      return `<div class="ytd-cat-card status-card">
-        <div class="yc-icon"><span class="msr">${r.icon || 'account_balance_wallet'}</span></div>
-        <div class="yc-info">
-          <div class="yc-name">${r.name}</div>
-          <div class="yc-count">${r.typeLabel} · Estado actual: ${formatEUR(r.amount)}</div>
-          <div class="yc-count">vs mes anterior: ${deltaStr}</div>
-          <div class="status-trend">${r.trendHtml}</div>
-        </div>
-        <div class="status-right">
-          <div class="yc-amount num">${formatEUR(r.amount)}</div>
-          ${r.latestId ? `<button class="tx-act" onclick="App.openEditStatus('${esc(r.latestId)}')" title="Editar último"><span class="msr">edit</span></button>` : ''}
-        </div>
-      </div>`;
-    }).join('');
-  },
-
-  renderStatusForm(accounts) {
-    const box = document.getElementById('statusFormRows');
-    if (!box) return;
-    box.innerHTML = accounts.map(a => `
-      <div class="field-group">
-        <span class="field-label">${a.name} (${this.statusTypeLabel(a.type)})</span>
-        <input class="m3-input" data-status-account="${a.id}" type="number" step="0.01" inputmode="decimal" placeholder="0.00">
-      </div>
-    `).join('');
-  },
-
-  statusTypeLabel(t) {
-    const type = String(t || '').toLowerCase();
-    if (type === 'ahorro') return 'Ahorro';
-    if (type === 'liquidez') return 'Liquidez';
-    if (type === 'inversion') return 'Inversión';
-    return type ? type.charAt(0).toUpperCase() + type.slice(1) : '—';
-  },
+  // Status UI is managed by status-dashboard.js (status.html)
 
   // ===== YTD MONTHLY CHART =====
   renderYTDMonthChart(monthData, currentMonth) {

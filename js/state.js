@@ -24,6 +24,7 @@ const FT = {
 
   // Data
   tx: [],           // Current month movimientos
+  _invTx: null,     // Datos del mes de inversión (si ≠ mes historial)
   templates: [],    // All plantillas
   categories: [],   // All categorias
   statusAccounts: [],
@@ -53,7 +54,7 @@ const Cache = {
       const raw = localStorage.getItem(this.key(year, month));
       if (!raw) return null;
       const data = JSON.parse(raw);
-      // Check staleness (3 min)
+      // Check staleness (30s)
       if (Date.now() - (data._ts || 0) > 30 * 1000) return null;
       return data.items;
     } catch (e) { return null; }
@@ -101,7 +102,7 @@ function todayStr() {
 }
 
 function nowISO() {
-  return new Date().toISOString().slice(0, 19);
+  return new Date().toISOString();
 }
 
 function parseAmount(v) {
@@ -133,16 +134,19 @@ function formatSignedEUR(n) {
 }
 
 function calcNextDate(dateStr, freq) {
-  const d = new Date(dateStr);
+  const d = new Date(dateStr + 'T12:00:00');
+  const origDay = d.getDate();
   const add = { mensual: 1, trimestral: 3, semestral: 6, anual: 12 }[freq] || 1;
   d.setMonth(d.getMonth() + add);
+  // Clamp: si el mes destino tiene menos días (ej: 31 Ene → 28 Feb)
+  if (d.getDate() !== origDay) d.setDate(0); // retrocede al último día del mes anterior
   return d.getFullYear() + '-' +
     String(d.getMonth() + 1).padStart(2, '0') + '-' +
     String(d.getDate()).padStart(2, '0');
 }
 
 function esc(s) {
-  return s.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 }
 
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',

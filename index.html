@@ -27,13 +27,13 @@
     </div>
   </header>
 
-  <!-- CONFIG -->
-  <div class="config-sheet" id="configSheet">
+  <!-- CONFIG — form aislado para evitar que Chrome sugiera guardar contraseña -->
+  <form class="config-sheet" id="configSheet" autocomplete="off" onsubmit="event.preventDefault();App.saveConfig()">
     <span class="field-label">Clave de acceso</span>
-    <input class="m3-input" type="password" id="scriptUrl" placeholder="Pega tu clave de Supabase (anon key)" autocomplete="new-password">
+    <input class="m3-input" type="text" id="sbKey" placeholder="Pega tu clave de Supabase (anon key)" autocomplete="off" data-1p-ignore data-lpignore="true" style="-webkit-text-security:disc">
     <div class="config-hint">Pega la anon key de tu proyecto Supabase. Se guarda sólo en este navegador.</div>
-    <button class="m3-tonal-btn" onclick="App.saveConfig()">Guardar</button>
-  </div>
+    <button type="submit" class="m3-tonal-btn">Guardar</button>
+  </form>
 
   <!-- BOTTOM NAV -->
   <nav class="bottom-nav">
@@ -152,15 +152,19 @@
         <div class="bh-item" id="sumInvItem" style="display:none"><span class="msr" style="font-size:16px;color:#8BBFE8">trending_up</span><span class="bh-amount num inv" id="sumInv">0,00€</span><span class="bh-tag">Invertido</span></div>
       </div>
     </div>
-    <button class="ytd-btn" onclick="App.openYTD()"><span class="msr">bar_chart</span> Ver Balance YTD</button>
+    <div class="hist-btn-row">
+      <button class="ytd-btn" onclick="App.openYTD()"><span class="msr">bar_chart</span> Balance YTD</button>
+      <button class="ytd-btn" onclick="App.openPredict()"><span class="msr">donut_large</span> Predicci&#243;n</button>
+    </div>
     <div class="filter-row">
       <button class="fchip active" data-f="all" onclick="App.setFilter('all')">Todos</button>
       <button class="fchip" data-f="Gasto" onclick="App.setFilter('Gasto')">Gastos</button>
       <button class="fchip" data-f="Ingreso" onclick="App.setFilter('Ingreso')">Ingresos</button>
       <button class="fchip" data-f="Com&#250;n" onclick="App.setFilter('Com&#250;n')">Comunes</button>
+      <button class="fchip" data-f="Inversi&#243;n" onclick="App.setFilter('Inversi&#243;n')">Ahorro</button>
     </div>
     <div class="tx-list" id="txList">
-      <div class="empty"><span class="msr">database</span><p>Configura tu Apps Script<br>para ver tus movimientos</p></div>
+      <div class="empty"><span class="msr">database</span><p>Configura tu clave de Supabase<br>para ver tus movimientos</p></div>
     </div>
   </section>
 
@@ -246,6 +250,33 @@
     <div class="ytd-section-title" style="margin-top:20px"><span class="msr" style="font-size:18px">arrow_upward</span> Ingresos por categor&#237;a</div>
     <div id="ytdIncCats" class="ytd-cat-list"></div>
     <div class="ytd-loading" id="ytdLoading" style="display:none"><span class="spinner"></span> Cargando datos del a&#241;o...</div>
+  </section>
+
+  <!-- ========== PREDICCI&#211;N DE GASTO ========== -->
+  <section class="section" id="sec-predict">
+    <div class="ytd-header">
+      <button class="icon-btn" onclick="App.closePredict()"><span class="msr">arrow_back</span></button>
+      <span class="ytd-title">Predicci&#243;n de gasto</span>
+    </div>
+    <div class="pred-hero">
+      <div class="pred-hero-row">
+        <div class="pred-hero-block">
+          <div class="bh-label">Gasto estimado</div>
+          <div class="bh-val num-lg pred-exp-val" id="predExpTotal">0,00&#8364;</div>
+        </div>
+        <div class="pred-hero-divider"></div>
+        <div class="pred-hero-block">
+          <div class="bh-label">Ingreso estimado</div>
+          <div class="bh-val num-lg pred-inc-val" id="predIncTotal">0,00&#8364;</div>
+        </div>
+      </div>
+      <div class="pred-meta" id="predMeta">Basado en 0 meses de historial</div>
+    </div>
+    <div class="pred-section-title"><span class="msr" style="font-size:18px;color:var(--exp)">arrow_downward</span> Gastos por categor&#237;a</div>
+    <div id="predExpList" class="ytd-cat-list"></div>
+    <div class="pred-section-title" style="margin-top:20px"><span class="msr" style="font-size:18px;color:var(--inc)">arrow_upward</span> Ingresos por categor&#237;a</div>
+    <div id="predIncList" class="ytd-cat-list"></div>
+    <div class="ytd-loading" id="predLoading" style="display:none"><span class="spinner"></span> Cargando historial completo...</div>
   </section>
 
 </div>
